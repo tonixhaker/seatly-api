@@ -13,6 +13,9 @@ enum ErrorCode: string
     case SEATS_NOT_HELD = 'SEATS_NOT_HELD';
     case ALREADY_CHECKED_IN = 'ALREADY_CHECKED_IN';
     case PAYMENT_DECLINED = 'PAYMENT_DECLINED';
+    case METHOD_NOT_ALLOWED = 'METHOD_NOT_ALLOWED';
+    case RATE_LIMITED = 'RATE_LIMITED';
+    case SERVICE_UNAVAILABLE = 'SERVICE_UNAVAILABLE';
     case INTERNAL_ERROR = 'INTERNAL_ERROR';
 
     public function status(): int
@@ -24,6 +27,9 @@ enum ErrorCode: string
             self::NOT_FOUND => 404,
             self::ALREADY_CHECKED_IN => 409,
             self::PAYMENT_DECLINED => 402,
+            self::METHOD_NOT_ALLOWED => 405,
+            self::RATE_LIMITED => 429,
+            self::SERVICE_UNAVAILABLE => 503,
             self::INTERNAL_ERROR => 500,
         };
     }
