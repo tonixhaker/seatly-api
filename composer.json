@@ -23,6 +23,7 @@
         "laravel/sail": "1.67.0",
         "mockery/mockery": "1.6.15",
         "nunomaduro/collision": "8.9.5",
+        "pestphp/pest": "3.8.7",
         "phpunit/phpunit": "11.5.56"
     },
     "autoload": {
