@@ -41,6 +41,7 @@ final class ApiExceptionRenderer
     private static function fromStatus(int $status): JsonResponse
     {
         return match ($status) {
+            403 => self::envelope(ErrorCode::FORBIDDEN, 'You are not allowed to perform this action.'),
             405 => self::envelope(ErrorCode::METHOD_NOT_ALLOWED, 'This HTTP method is not supported for this route.'),
             429 => self::envelope(ErrorCode::RATE_LIMITED, 'Too many requests. Please retry later.'),
             503 => self::envelope(ErrorCode::SERVICE_UNAVAILABLE, 'The service is temporarily unavailable.'),
