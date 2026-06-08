@@ -12,6 +12,7 @@ enum ErrorCode: string
     case NOT_FOUND = 'NOT_FOUND';
     case SEATS_NOT_HELD = 'SEATS_NOT_HELD';
     case ALREADY_CHECKED_IN = 'ALREADY_CHECKED_IN';
+    case INVALID_STATE_TRANSITION = 'INVALID_STATE_TRANSITION';
     case PAYMENT_DECLINED = 'PAYMENT_DECLINED';
     case METHOD_NOT_ALLOWED = 'METHOD_NOT_ALLOWED';
     case RATE_LIMITED = 'RATE_LIMITED';
@@ -25,7 +26,7 @@ enum ErrorCode: string
             self::UNAUTHENTICATED => 401,
             self::FORBIDDEN => 403,
             self::NOT_FOUND => 404,
-            self::ALREADY_CHECKED_IN => 409,
+            self::ALREADY_CHECKED_IN, self::INVALID_STATE_TRANSITION => 409,
             self::PAYMENT_DECLINED => 402,
             self::METHOD_NOT_ALLOWED => 405,
             self::RATE_LIMITED => 429,
