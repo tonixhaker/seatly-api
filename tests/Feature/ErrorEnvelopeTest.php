@@ -159,3 +159,12 @@ it('maps abort(403) to FORBIDDEN rather than a server error', function (): void 
         ->assertJsonPath('error.code', 'FORBIDDEN')
         ->assertJsonMissingPath('error.details');
 });
+
+it('401 UNAUTHENTICATED on a protected route without a JSON Accept header', function (): void {
+    $this->get('/api/v1/me', ['Accept' => 'text/html'])
+        ->assertStatus(401)
+        ->assertJsonPath('error.code', 'UNAUTHENTICATED')
+        ->assertJsonMissingPath('error.details');
+
+    $this->get('/api/v1/my/tickets')->assertStatus(401)->assertJsonPath('error.code', 'UNAUTHENTICATED');
+});
