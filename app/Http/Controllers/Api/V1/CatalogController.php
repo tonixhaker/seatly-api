@@ -11,6 +11,7 @@ use App\Http\Resources\EventResource;
 use App\Http\Resources\SeatResource;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
  * @phpstan-type VenueFixture object{id: int, name: string, address: string, city: string}
@@ -19,6 +20,9 @@ use Illuminate\Pagination\LengthAwarePaginator;
  */
 final class CatalogController extends Controller
 {
+    /**
+     * List published events.
+     */
     public function index(IndexEventsRequest $request): AnonymousResourceCollection
     {
         $from = $request->string('starts_from')->toString();
@@ -44,11 +48,21 @@ final class CatalogController extends Controller
         return EventResource::collection($paginator);
     }
 
+    /**
+     * Return one published event with its venue.
+     *
+     * @throws NotFoundHttpException
+     */
     public function show(int $id): EventDetailResource
     {
         return new EventDetailResource(self::publishedEvent($id));
     }
 
+    /**
+     * Return the seat map snapshot for an event.
+     *
+     * @throws NotFoundHttpException
+     */
     public function seats(int $id): AnonymousResourceCollection
     {
         self::publishedEvent($id);
