@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Domain\Order\Exceptions\PaymentDeclinedException;
 use App\Domain\Shared\Enums\ErrorCode;
 use App\Domain\Shared\Exceptions\DomainException;
 use App\Models\User;
@@ -167,4 +168,14 @@ it('401 UNAUTHENTICATED on a protected route without a JSON Accept header', func
         ->assertJsonMissingPath('error.details');
 
     $this->get('/api/v1/my/tickets')->assertStatus(401)->assertJsonPath('error.code', 'UNAUTHENTICATED');
+});
+
+it('renders PaymentDeclinedException as 402 PAYMENT_DECLINED', function (): void {
+    $url = envelopeRoute('payment-declined', fn () => throw new PaymentDeclinedException('The card was declined.'));
+
+    $this->getJson($url)
+        ->assertStatus(402)
+        ->assertJsonPath('error.code', 'PAYMENT_DECLINED')
+        ->assertJsonPath('error.message', 'The card was declined.')
+        ->assertJsonMissingPath('error.details');
 });
