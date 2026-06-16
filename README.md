@@ -22,6 +22,25 @@ Event payload schemas in `docs/events/`.
 
 ## Running it
 
+### With Docker
+
+The image is self-contained: nginx and PHP-FPM, PostgreSQL driver included. It needs no
+local PHP or Composer.
+
+```bash
+docker build -t seatly-api .
+docker run --rm -p 8000:8000 \
+  -e APP_KEY=base64:$(openssl rand -base64 32) \
+  -e DB_HOST=host.docker.internal -e DB_DATABASE=seatly \
+  -e DB_USERNAME=seatly -e DB_PASSWORD=secret \
+  seatly-api
+```
+
+Serves on `http://localhost:8000`. `GET /health/live` answers without a database;
+`GET /health` reports database readiness and returns 503 when Postgres is unreachable.
+
+### Without Docker
+
 Needs PHP 8.4, Composer, PostgreSQL 17, and a reachable `seatly-realtime` for checkout.
 
 ```bash
@@ -32,11 +51,10 @@ php artisan migrate --seed
 php artisan serve
 ```
 
-Serves on `http://localhost:8000`.
-
 ## Status
 
-Work in progress. Not runnable yet.
+Work in progress. The API surface is a fixture skeleton — the endpoints answer with the
+shapes the contract describes, backed by no database yet. The image builds and runs.
 
 ## License
 
