@@ -32,7 +32,7 @@ docker build -t seatly-api .
 docker run --rm -p 8000:8000 \
   -e APP_KEY=base64:$(openssl rand -base64 32) \
   -e DB_HOST=host.docker.internal -e DB_DATABASE=seatly \
-  -e DB_USERNAME=seatly -e DB_PASSWORD=secret \
+  -e DB_USERNAME=seatly -e DB_PASSWORD=seatly \
   seatly-api
 ```
 
@@ -42,6 +42,13 @@ Serves on `http://localhost:8000`. `GET /health/live` answers without a database
 ### Without Docker
 
 Needs PHP 8.4, Composer, PostgreSQL 17, and a reachable `seatly-realtime` for checkout.
+`.env.example` expects Postgres on `127.0.0.1:5432` with database, user and password all
+`seatly`:
+
+```bash
+docker run -d -p 5432:5432 \
+  -e POSTGRES_DB=seatly -e POSTGRES_USER=seatly -e POSTGRES_PASSWORD=seatly postgres:17
+```
 
 ```bash
 composer install
