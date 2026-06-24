@@ -58,6 +58,32 @@ php artisan migrate --seed
 php artisan serve
 ```
 
+### Tests
+
+The Pest suite runs against a real PostgreSQL, not sqlite. `jsonb`, the database-level
+enum `CHECK` constraints and the `gen_random_uuid()` primary-key defaults do not exist on
+sqlite, so a suite pinned to it could not observe the schema it is meant to prove.
+`phpunit.xml` forces `DB_CONNECTION=pgsql` and `DB_DATABASE=seatly_test`; a missing or
+unreachable database fails the run loudly instead of skipping.
+
+Create the test database once, alongside the Compose stack:
+
+```bash
+docker compose exec -T postgres psql -U seatly -d postgres -c 'CREATE DATABASE seatly_test'
+```
+
+The suite drops and recreates every table in `seatly_test` on each run, and never touches
+the `seatly` development database. With no local PHP, run it from the built image:
+
+```bash
+docker run --rm -v "$PWD":/var/www/html -w /var/www/html \
+  --network seatly_default --user "$(id -u)" \
+  -e DB_HOST=postgres -e DB_USERNAME=seatly -e DB_PASSWORD=seatly \
+  seatly-api vendor/bin/pest
+```
+
+Do not pass `-e DB_DATABASE` — that is what keeps the wipe aimed at `seatly_test`.
+
 ## Status
 
 Work in progress. The API surface is a fixture skeleton — the endpoints answer with the
