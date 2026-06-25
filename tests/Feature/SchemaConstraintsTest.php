@@ -81,6 +81,26 @@ $insertOrder = function (int $buyerId, int $eventId, string $key, string $status
     return $id;
 };
 
+$insertItem = function (string $orderId, int $seatId): void {
+    DB::table('order_items')->insert([
+        'order_id' => $orderId,
+        'event_seat_id' => $seatId,
+        'price_cents' => 5000,
+    ]);
+};
+
+$insertTicket = function (string $orderId, int $seatId, string $qrCode): void {
+    DB::table('tickets')->insert([
+        'order_id' => $orderId,
+        'event_seat_id' => $seatId,
+        'qr_code' => $qrCode,
+        'status' => 'issued',
+        'checked_in_at' => null,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+};
+
 $scaffold = function () use ($insertUser, $insertVenue, $insertEvent, $insertSeat, $insertOrder): array {
     $organizerId = $insertUser('organizer');
     $buyerId = $insertUser('buyer');
@@ -264,23 +284,70 @@ it('stores venues.seat_map_template as jsonb, which sqlite cannot represent', fu
     expect($type)->toBe('jsonb');
 });
 
-it('refuses to delete a row another table still references', function (string $table, string $idKey) use ($scaffold): void {
-    $ids = $scaffold();
+it('refuses to delete a row another table still references, naming the exact constraint', function (string $case, string $constraint) use ($insertUser, $insertVenue, $insertEvent, $insertSeat, $insertOrder, $insertItem, $insertTicket): void {
+    $organizerId = $insertUser('organizer');
+    $buyerId = $insertUser('buyer');
+    $venueId = $insertVenue();
+    $eventId = $insertEvent($organizerId, $venueId);
 
-    DB::table('order_items')->insert([
-        'order_id' => $ids['order_id'],
-        'event_seat_id' => $ids['seat_id'],
-        'price_cents' => 5000,
-    ]);
+    $targets = [
+        'events.organizer_id' => fn (): array => ['users', $organizerId],
+        'events.venue_id' => fn (): array => ['venues', $venueId],
+        'event_seats.event_id' => function () use ($insertSeat, $eventId): array {
+            $insertSeat($eventId);
 
-    expect(fn () => DB::table($table)->where('id', $ids[$idKey])->delete())
-        ->toThrow(QueryException::class, 'violates foreign key constraint');
+            return ['events', $eventId];
+        },
+        'orders.buyer_id' => function () use ($insertOrder, $buyerId, $eventId): array {
+            $insertOrder($buyerId, $eventId, 'fk-orders-buyer');
+
+            return ['users', $buyerId];
+        },
+        'orders.event_id' => function () use ($insertOrder, $buyerId, $eventId): array {
+            $insertOrder($buyerId, $eventId, 'fk-orders-event');
+
+            return ['events', $eventId];
+        },
+        'order_items.order_id' => function () use ($insertOrder, $insertSeat, $insertItem, $buyerId, $eventId): array {
+            $orderId = $insertOrder($buyerId, $eventId, 'fk-items-order');
+            $insertItem($orderId, $insertSeat($eventId));
+
+            return ['orders', $orderId];
+        },
+        'order_items.event_seat_id' => function () use ($insertOrder, $insertSeat, $insertItem, $buyerId, $eventId): array {
+            $seatId = $insertSeat($eventId);
+            $insertItem($insertOrder($buyerId, $eventId, 'fk-items-seat'), $seatId);
+
+            return ['event_seats', $seatId];
+        },
+        'tickets.order_id' => function () use ($insertOrder, $insertSeat, $insertTicket, $buyerId, $eventId): array {
+            $orderId = $insertOrder($buyerId, $eventId, 'fk-tickets-order');
+            $insertTicket($orderId, $insertSeat($eventId), 'FKTICKETORD1');
+
+            return ['orders', $orderId];
+        },
+        'tickets.event_seat_id' => function () use ($insertOrder, $insertSeat, $insertTicket, $buyerId, $eventId): array {
+            $seatId = $insertSeat($eventId);
+            $insertTicket($insertOrder($buyerId, $eventId, 'fk-tickets-seat'), $seatId, 'FKTICKETSEA1');
+
+            return ['event_seats', $seatId];
+        },
+    ];
+
+    [$table, $id] = $targets[$case]();
+
+    expect(fn () => DB::table($table)->where('id', $id)->delete())
+        ->toThrow(QueryException::class, $constraint);
 })->with([
-    'users referenced by events' => ['users', 'organizer_id'],
-    'venues referenced by events' => ['venues', 'venue_id'],
-    'events referenced by event_seats' => ['events', 'event_id'],
-    'orders referenced by order_items' => ['orders', 'order_id'],
-    'event_seats referenced by order_items' => ['event_seats', 'seat_id'],
+    'events.organizer_id' => ['events.organizer_id', 'events_organizer_id_foreign'],
+    'events.venue_id' => ['events.venue_id', 'events_venue_id_foreign'],
+    'event_seats.event_id' => ['event_seats.event_id', 'event_seats_event_id_foreign'],
+    'orders.buyer_id' => ['orders.buyer_id', 'orders_buyer_id_foreign'],
+    'orders.event_id' => ['orders.event_id', 'orders_event_id_foreign'],
+    'order_items.order_id' => ['order_items.order_id', 'order_items_order_id_foreign'],
+    'order_items.event_seat_id' => ['order_items.event_seat_id', 'order_items_event_seat_id_foreign'],
+    'tickets.order_id' => ['tickets.order_id', 'tickets_order_id_foreign'],
+    'tickets.event_seat_id' => ['tickets.event_seat_id', 'tickets_event_seat_id_foreign'],
 ]);
 
 it('declares a check constraint whose literals match the PHP enum exactly', function (string $constraint, string $enum): void {
