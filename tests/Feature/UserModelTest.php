@@ -37,7 +37,7 @@ it('casts role to the UserRole enum after a database round trip', function (): v
         ->and(DB::table('users')->where('id', $user->getKey())->value('role'))->toBe('organizer');
 });
 
-it('authenticates GET /api/v1/me with a real Sanctum token, while the body is still the milestone-01 fixture', function (): void {
+it('answers GET /api/v1/me with the token owner, not a fixture', function (): void {
     $user = User::factory()->create();
 
     $token = $user->createToken('test-token')->plainTextToken;
@@ -46,6 +46,10 @@ it('authenticates GET /api/v1/me with a real Sanctum token, while the body is st
         ->assertStatus(200);
 
     expect(array_keys((array) $response->json()))->toBe(['id', 'name', 'email', 'role'])
+        ->and($response->json('id'))->toBe($user->id)
+        ->and($response->json('email'))->toBe($user->email)
+        ->and($response->json('name'))->toBe($user->name)
+        ->and($response->json('role'))->toBe('buyer')
         ->and(DB::table('personal_access_tokens')->where('tokenable_id', $user->getKey())->count())->toBe(1);
 });
 

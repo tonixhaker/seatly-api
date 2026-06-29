@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Domain\User\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 
 uses(RefreshDatabase::class);
 
@@ -50,13 +51,19 @@ it('rejects registration with an email that already exists', function (): void {
         ->assertJsonStructure(['error' => ['details' => ['email']]]);
 });
 
-it('registers a valid payload and returns a token with the four user fields', function (): void {
+it('registers a valid payload, persists the user and issues exactly one token', function (): void {
     $response = $this->postJson('/api/v1/auth/register', registerPayload())
         ->assertStatus(201);
 
+    $id = $response->json('user.id');
+
     expect(array_keys((array) $response->json()))->toBe(['token', 'user'])
         ->and(array_keys((array) $response->json('user')))->toBe(['id', 'name', 'email', 'role'])
-        ->and($response->json('token'))->toBeString()->not->toBeEmpty();
+        ->and($response->json('token'))->toBeString()->not->toBeEmpty()
+        ->and($response->json('user.email'))->toBe('ada@example.com')
+        ->and($response->json('user.role'))->toBe('buyer')
+        ->and(DB::table('users')->where('id', $id)->value('email'))->toBe('ada@example.com')
+        ->and(DB::table('personal_access_tokens')->where('tokenable_id', $id)->count())->toBe(1);
 });
 
 it('never echoes a password or a password hash on register', function (): void {
@@ -69,6 +76,8 @@ it('never echoes a password or a password hash on register', function (): void {
 });
 
 it('logs in a valid payload and returns a token with the four user fields', function (): void {
+    User::factory()->create(['email' => 'ada@example.com', 'password' => 'correct-horse']);
+
     $response = $this->postJson('/api/v1/auth/login', [
         'email' => 'ada@example.com',
         'password' => 'correct-horse',
@@ -101,18 +110,22 @@ it('rejects an unauthenticated logout', function (): void {
 });
 
 it('returns the current user unwrapped for an authenticated request', function (): void {
-    $response = $this->actingAs(User::factory()->create(), 'sanctum')
+    $user = User::factory()->create();
+
+    $response = $this->actingAs($user, 'sanctum')
         ->getJson('/api/v1/me')
         ->assertStatus(200);
 
     expect(array_keys((array) $response->json()))->toBe(['id', 'name', 'email', 'role'])
+        ->and($response->json('id'))->toBe($user->id)
+        ->and($response->json('email'))->toBe($user->email)
         ->and($response->json('data'))->toBeNull()
         ->and($response->getContent())
         ->not->toContain('password')
         ->not->toContain('$2y$');
 });
 
-it('logs out an authenticated user with an empty 204', function (): void {
+it('logs out a session-authenticated user with an empty 204, so a TransientToken is a no-op', function (): void {
     $response = $this->actingAs(User::factory()->create(), 'sanctum')
         ->postJson('/api/v1/auth/logout')
         ->assertStatus(204);
@@ -157,4 +170,86 @@ it('throttles register and login from one shared per-address bucket', function (
     $this->postJson('/api/v1/auth/login', ['email' => 'nobody@example.com'])
         ->assertStatus(429)
         ->assertJsonPath('error.code', 'RATE_LIMITED');
+});
+
+it('registers, then logs in with those credentials, then identifies the caller through GET /me', function (): void {
+    $register = $this->postJson('/api/v1/auth/register', registerPayload())->assertStatus(201);
+
+    $login = $this->postJson('/api/v1/auth/login', [
+        'email' => 'ada@example.com',
+        'password' => 'correct-horse',
+    ])->assertStatus(200);
+
+    $me = $this->getJson('/api/v1/me', ['Authorization' => 'Bearer '.$login->json('token')])
+        ->assertStatus(200);
+
+    expect($login->json('token'))->not->toBe($register->json('token'))
+        ->and($me->json())->toBe($login->json('user'))
+        ->and($me->json())->toBe($register->json('user'))
+        ->and($me->json('email'))->toBe('ada@example.com');
+});
+
+it('answers a wrong password and an unknown email with byte-identical bodies', function (): void {
+    $this->postJson('/api/v1/auth/register', registerPayload())->assertStatus(201);
+
+    $wrongPassword = $this->postJson('/api/v1/auth/login', [
+        'email' => 'ada@example.com',
+        'password' => 'not-the-password',
+    ])->assertStatus(422);
+
+    $unknownEmail = $this->postJson('/api/v1/auth/login', [
+        'email' => 'nobody@example.com',
+        'password' => 'not-the-password',
+    ])->assertStatus(422);
+
+    $wrongPassword->assertJsonPath('error.code', 'VALIDATION_FAILED')->assertJsonMissingPath('error.details');
+    $unknownEmail->assertJsonPath('error.code', 'VALIDATION_FAILED')->assertJsonMissingPath('error.details');
+
+    expect($wrongPassword->getContent())->toBe($unknownEmail->getContent());
+});
+
+it('revokes only the token that logged out and leaves the second session working', function (): void {
+    $first = $this->postJson('/api/v1/auth/register', registerPayload())->assertStatus(201);
+
+    $second = $this->postJson('/api/v1/auth/login', [
+        'email' => 'ada@example.com',
+        'password' => 'correct-horse',
+    ])->assertStatus(200);
+
+    $id = $first->json('user.id');
+
+    $this->app['auth']->forgetGuards();
+    $this->postJson('/api/v1/auth/logout', [], ['Authorization' => 'Bearer '.$first->json('token')])
+        ->assertStatus(204);
+
+    $this->app['auth']->forgetGuards();
+    $this->getJson('/api/v1/me', ['Authorization' => 'Bearer '.$second->json('token')])
+        ->assertStatus(200)
+        ->assertJsonPath('id', $id);
+
+    $this->app['auth']->forgetGuards();
+    $this->getJson('/api/v1/me', ['Authorization' => 'Bearer '.$first->json('token')])
+        ->assertStatus(401)
+        ->assertJsonPath('error.code', 'UNAUTHENTICATED');
+
+    expect(DB::table('personal_access_tokens')->where('tokenable_id', $id)->count())->toBe(1);
+});
+
+it('never puts the submitted password or a hash on the wire', function (): void {
+    $register = $this->postJson('/api/v1/auth/register', registerPayload())->assertStatus(201);
+
+    $login = $this->postJson('/api/v1/auth/login', [
+        'email' => 'ada@example.com',
+        'password' => 'correct-horse',
+    ])->assertStatus(200);
+
+    $me = $this->getJson('/api/v1/me', ['Authorization' => 'Bearer '.$login->json('token')])
+        ->assertStatus(200);
+
+    foreach ([$register, $login, $me] as $response) {
+        expect($response->getContent())
+            ->not->toContain('correct-horse')
+            ->not->toContain('$2y$')
+            ->not->toContain('$argon');
+    }
 });
