@@ -135,3 +135,26 @@ it('rejects an unresolvable bearer token with UNAUTHENTICATED rather than a serv
         ->assertStatus(401)
         ->assertJsonPath('error.code', 'UNAUTHENTICATED');
 });
+
+it('throttles the login route and answers RATE_LIMITED with Retry-After', function (): void {
+    foreach (range(1, 10) as $ignored) {
+        $this->postJson('/api/v1/auth/login', ['email' => 'nobody@example.com'])
+            ->assertStatus(422);
+    }
+
+    $this->postJson('/api/v1/auth/login', ['email' => 'nobody@example.com'])
+        ->assertStatus(429)
+        ->assertJsonPath('error.code', 'RATE_LIMITED')
+        ->assertHeader('Retry-After')
+        ->assertHeader('X-RateLimit-Limit', '10');
+});
+
+it('throttles register and login from one shared per-address bucket', function (): void {
+    foreach (range(1, 10) as $ignored) {
+        $this->postJson('/api/v1/auth/register', registerPayload());
+    }
+
+    $this->postJson('/api/v1/auth/login', ['email' => 'nobody@example.com'])
+        ->assertStatus(429)
+        ->assertJsonPath('error.code', 'RATE_LIMITED');
+});
