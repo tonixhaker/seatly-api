@@ -121,6 +121,19 @@ it('maps a throttled request to RATE_LIMITED', function (): void {
         ->assertJsonPath('error.code', 'RATE_LIMITED');
 });
 
+it('forwards the Retry-After header a throttled exception carries', function (): void {
+    $url = envelopeRoute('throttled-headers', fn () => throw new ThrottleRequestsException('Too Many Attempts.', null, [
+        'Retry-After' => 42,
+        'X-RateLimit-Limit' => 10,
+    ]));
+
+    $this->getJson($url)
+        ->assertStatus(429)
+        ->assertJsonPath('error.code', 'RATE_LIMITED')
+        ->assertHeader('Retry-After', '42')
+        ->assertHeader('X-RateLimit-Limit', '10');
+});
+
 it('maps maintenance mode to SERVICE_UNAVAILABLE', function (): void {
     $url = envelopeRoute('maintenance', fn () => throw new HttpException(503));
 
