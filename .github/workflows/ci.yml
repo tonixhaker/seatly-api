@@ -53,7 +53,13 @@ jobs:
         run: test ! -f phpstan-baseline.neon
 
       - name: Analyse with PHPStan at level 9
-        run: vendor/bin/phpstan analyse --no-progress
+        run: vendor/bin/phpstan analyse --no-progress --memory-limit=512M
+
+      - name: Run the unit suite with no database reachable
+        run: vendor/bin/pest --testsuite=Unit
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: '1'
 
       - name: Run the Pest suite
         run: vendor/bin/pest
