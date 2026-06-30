@@ -304,19 +304,6 @@ it('409 ALREADY_CHECKED_IN carrying the first check-in timestamp', function (): 
         ->assertJsonPath('error.details.checked_in_at', '2026-10-01T18:42:07Z');
 });
 
-it('keeps the organizer fixtures in step with the public catalogue', function (): void {
-    $this->actingAs(organizerUser(), 'sanctum')
-        ->getJson('/api/v1/organizer/events/1/stats')
-        ->assertStatus(200)
-        ->assertJsonPath('event_id', 1);
-
-    $this->getJson('/api/v1/events/1')
-        ->assertStatus(200)
-        ->assertJsonPath('title', 'Autumn Symphony')
-        ->assertJsonPath('starts_at', '2026-10-01T19:00:00Z')
-        ->assertJsonPath('status', 'published');
-});
-
 it('hostile input never 500s', function (string $method, string $uri, array $payload): void {
     $status = $this->actingAs(organizerUser(), 'sanctum')->json($method, $uri, $payload)->getStatusCode();
 

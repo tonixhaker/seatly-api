@@ -13,6 +13,7 @@ use App\Domain\Venue\Repositories\VenueRepositoryInterface;
 use App\Infrastructure\Persistence\EloquentEventRepository;
 use App\Infrastructure\Persistence\EloquentUserRepository;
 use App\Infrastructure\Persistence\EloquentVenueRepository;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Pagination\LengthAwarePaginator;
 
@@ -60,6 +61,11 @@ it('changes the service behaviour when the implementation binding is swapped', f
             }
 
             public function findOwnedByOrganizer(int $id, int $organizerId): ?Event
+            {
+                return null;
+            }
+
+            public function seatsForPublished(int $eventId): ?Collection
             {
                 return null;
             }
