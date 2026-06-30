@@ -17,6 +17,8 @@ use Illuminate\Support\Carbon;
  */
 class Event extends Model
 {
+    protected $dateFormat = 'Y-m-d H:i:s';
+
     protected $fillable = [
         'organizer_id',
         'venue_id',
