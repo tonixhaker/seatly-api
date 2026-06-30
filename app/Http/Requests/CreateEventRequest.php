@@ -14,7 +14,7 @@ final class CreateEventRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'venue_id' => ['required', 'numeric', 'integer', 'min:1'],
+            'venue_id' => ['required', 'numeric', 'integer', 'min:1', 'exists:venues,id'],
             'title' => ['required', 'string', 'min:1', 'max:255', 'not_regex:/[\\x00-\\x1F\\x7F]/'],
             'description' => ['nullable', 'string', 'max:2000', 'not_regex:/\\x00/'],
             /** @format date-time */

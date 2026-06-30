@@ -7,6 +7,7 @@ use App\Domain\Event\Enums\EventStatus;
 use App\Domain\Event\Models\Event;
 use App\Domain\Event\Repositories\EventRepositoryInterface;
 use App\Domain\Event\Services\EventCatalogService;
+use App\Domain\Event\Services\EventDraftService;
 use App\Domain\User\Repositories\UserRepositoryInterface;
 use App\Domain\Venue\Models\Venue;
 use App\Domain\Venue\Repositories\VenueRepositoryInterface;
@@ -29,6 +30,10 @@ it('resolves every repository interface through the container', function (string
 
 it('autowires the catalog service from the interface binding alone', function (): void {
     expect(app(EventCatalogService::class))->toBeInstanceOf(EventCatalogService::class);
+});
+
+it('autowires the draft service from both repository bindings alone', function (): void {
+    expect(app(EventDraftService::class))->toBeInstanceOf(EventDraftService::class);
 });
 
 it('changes the service behaviour when the implementation binding is swapped', function (): void {

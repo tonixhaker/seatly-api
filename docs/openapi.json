@@ -1301,8 +1301,8 @@
                             }
                         }
                     },
-                    "403": {
-                        "description": "FORBIDDEN",
+                    "404": {
+                        "description": "NOT_FOUND",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -1314,7 +1314,7 @@
                                                 "code": {
                                                     "type": "string",
                                                     "enum": [
-                                                        "FORBIDDEN"
+                                                        "NOT_FOUND"
                                                     ]
                                                 },
                                                 "message": {
@@ -1335,8 +1335,8 @@
                             }
                         }
                     },
-                    "404": {
-                        "description": "NOT_FOUND",
+                    "403": {
+                        "description": "FORBIDDEN",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -1348,7 +1348,7 @@
                                                 "code": {
                                                     "type": "string",
                                                     "enum": [
-                                                        "NOT_FOUND"
+                                                        "FORBIDDEN"
                                                     ]
                                                 },
                                                 "message": {
