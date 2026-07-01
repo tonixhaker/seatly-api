@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use App\Domain\Event\Contracts\EventPublisherInterface;
+use App\Domain\Event\Events\EventPublished;
 use App\Domain\User\Enums\UserRole;
 use App\Domain\User\Models\User;
 use Carbon\CarbonImmutable;
@@ -432,7 +434,6 @@ it('another organizer event is 404 never 403 on the fixture routes', function (s
 
     expect($response->getStatusCode())->not->toBe(403);
 })->with([
-    'publish' => ['post', '/api/v1/organizer/events/2/publish'],
     'stats' => ['get', '/api/v1/organizer/events/2/stats'],
 ]);
 
@@ -480,27 +481,6 @@ it('404 for a well formed qr code that matches no ticket', function () use ($fix
         ->assertStatus(404)
         ->assertJsonPath('error.code', 'NOT_FOUND');
 });
-
-it('publishes a draft', function () use ($fixtureOrganizer): void {
-    $this->actingAs($fixtureOrganizer(), 'sanctum')
-        ->postJson('/api/v1/organizer/events/3/publish')
-        ->assertStatus(200)
-        ->assertJsonPath('id', 3)
-        ->assertJsonPath('status', 'published')
-        ->assertJsonPath('title', 'Spring Gala')
-        ->assertJsonPath('starts_at', '2027-03-04T18:00:00Z');
-});
-
-it('409 INVALID_STATE_TRANSITION when publishing an event that is not a draft', function (int $id, string $status) use ($fixtureOrganizer): void {
-    $this->actingAs($fixtureOrganizer(), 'sanctum')
-        ->postJson('/api/v1/organizer/events/'.$id.'/publish')
-        ->assertStatus(409)
-        ->assertJsonPath('error.code', 'INVALID_STATE_TRANSITION')
-        ->assertJsonPath('error.details.status', $status);
-})->with([
-    'published' => [1, 'published'],
-    'archived' => [4, 'archived'],
-]);
 
 it('reports the sales dashboard for an event that has seats', function (int $id) use ($fixtureOrganizer): void {
     $response = $this->actingAs($fixtureOrganizer(), 'sanctum')
@@ -550,4 +530,276 @@ it('409 ALREADY_CHECKED_IN carrying the first check-in timestamp', function () u
         ->assertStatus(409)
         ->assertJsonPath('error.code', 'ALREADY_CHECKED_IN')
         ->assertJsonPath('error.details.checked_in_at', '2026-10-01T18:42:07Z');
+});
+
+$seatMap = function (array $sections): array {
+    return ['sections' => $sections];
+};
+
+$gridSection = function (string $name, int $rows, int $seats, int $priceCents, int $xOffset): array {
+    $built = [];
+
+    for ($row = 1; $row <= $rows; $row++) {
+        for ($number = 1; $number <= $seats; $number++) {
+            $built[] = [
+                'row' => $row,
+                'number' => $number,
+                'x' => $xOffset + $number * 40,
+                'y' => $row * 40,
+                'price_cents' => $priceCents,
+            ];
+        }
+    }
+
+    return ['name' => $name, 'seats' => $built];
+};
+
+$setTemplate = function (int $venueId, array $template): void {
+    DB::table('venues')->where('id', $venueId)->update([
+        'seat_map_template' => json_encode($template, JSON_THROW_ON_ERROR),
+    ]);
+};
+
+$recordingPublisher = function (): EventPublisherInterface {
+    return new class implements EventPublisherInterface
+    {
+        /** @var list<array{event: EventPublished, level: int}> */
+        public array $emitted = [];
+
+        public function publish(EventPublished $event): void
+        {
+            $this->emitted[] = ['event' => $event, 'level' => DB::transactionLevel()];
+        }
+    };
+};
+
+it('generates one seat per template seat, with the template coordinates and prices', function () use ($seatMap, $gridSection, $setTemplate): void {
+    $template = $seatMap([$gridSection('A', 2, 3, 5000, 0), $gridSection('B', 2, 3, 3500, 200)]);
+    $setTemplate($this->ids['arena'], $template);
+
+    $response = $this->actingAs($this->owner, 'sanctum')
+        ->postJson('/api/v1/organizer/events/'.$this->ids['draft'].'/publish')
+        ->assertStatus(200)
+        ->assertJsonPath('id', $this->ids['draft'])
+        ->assertJsonPath('status', 'published')
+        ->assertJsonPath('title', 'Spring Gala');
+
+    expect(array_keys((array) $response->json()))->toBe(['id', 'title', 'description', 'starts_at', 'status', 'venue'])
+        ->and(DB::table('events')->where('id', $this->ids['draft'])->value('status'))->toBe('published');
+
+    $rows = DB::table('event_seats')
+        ->where('event_id', $this->ids['draft'])
+        ->orderBy('section')->orderBy('row')->orderBy('number')
+        ->get(['section', 'row', 'number', 'x', 'y', 'price_cents', 'currency', 'status'])
+        ->map(fn (object $row): array => [
+            'section' => $row->section,
+            'row' => (int) $row->row,
+            'number' => (int) $row->number,
+            'x' => (int) $row->x,
+            'y' => (int) $row->y,
+            'price_cents' => (int) $row->price_cents,
+            'currency' => $row->currency,
+            'status' => $row->status,
+        ])->all();
+
+    $expected = [];
+
+    foreach ($template['sections'] as $section) {
+        foreach ($section['seats'] as $seat) {
+            $expected[] = [
+                'section' => $section['name'],
+                'row' => $seat['row'],
+                'number' => $seat['number'],
+                'x' => $seat['x'],
+                'y' => $seat['y'],
+                'price_cents' => $seat['price_cents'],
+                'currency' => 'EUR',
+                'status' => 'free',
+            ];
+        }
+    }
+
+    expect($rows)->toBe($expected);
+});
+
+it('serves the generated seats through the public snapshot immediately afterwards', function () use ($seatMap, $gridSection, $setTemplate): void {
+    $setTemplate($this->ids['arena'], $seatMap([$gridSection('A', 2, 3, 5000, 0)]));
+
+    $this->actingAs($this->owner, 'sanctum')
+        ->postJson('/api/v1/organizer/events/'.$this->ids['draft'].'/publish')
+        ->assertStatus(200);
+
+    $seats = $this->getJson('/api/v1/events/'.$this->ids['draft'].'/seats')->assertStatus(200)->json();
+
+    expect($seats)->toHaveCount(6)
+        ->and(array_keys((array) $seats[0]))->toBe(['id', 'section', 'row', 'number', 'x', 'y', 'price_cents', 'currency', 'status'])
+        ->and($seats[0]['section'])->toBe('A')
+        ->and($seats[0]['x'])->toBe(40)
+        ->and($seats[0]['price_cents'])->toBe(5000)
+        ->and($seats[0]['status'])->toBe('free');
+});
+
+it('409s the second publish and leaves the seat count unchanged', function () use ($seatMap, $gridSection, $setTemplate): void {
+    $setTemplate($this->ids['arena'], $seatMap([$gridSection('A', 2, 3, 5000, 0)]));
+
+    $this->actingAs($this->owner, 'sanctum')
+        ->postJson('/api/v1/organizer/events/'.$this->ids['draft'].'/publish')
+        ->assertStatus(200);
+
+    $after = DB::table('event_seats')->where('event_id', $this->ids['draft'])->count();
+
+    $this->actingAs($this->owner, 'sanctum')
+        ->postJson('/api/v1/organizer/events/'.$this->ids['draft'].'/publish')
+        ->assertStatus(409)
+        ->assertJsonPath('error.code', 'INVALID_STATE_TRANSITION')
+        ->assertJsonPath('error.details.status', 'published');
+
+    expect($after)->toBe(6)
+        ->and(DB::table('event_seats')->where('event_id', $this->ids['draft'])->count())->toBe(6);
+});
+
+it('409 INVALID_STATE_TRANSITION when publishing an event that is not a draft', function (string $key, string $status) use ($seatMap, $gridSection, $setTemplate): void {
+    $setTemplate($this->ids['arena'], $seatMap([$gridSection('A', 1, 2, 5000, 0)]));
+    $setTemplate($this->ids['hall'], $seatMap([$gridSection('A', 1, 2, 5000, 0)]));
+
+    $id = $key === 'published' ? $this->ids['published'][0] : $this->ids['archived'];
+
+    $this->actingAs($this->owner, 'sanctum')
+        ->postJson('/api/v1/organizer/events/'.$id.'/publish')
+        ->assertStatus(409)
+        ->assertJsonPath('error.code', 'INVALID_STATE_TRANSITION')
+        ->assertJsonPath('error.details.status', $status);
+})->with([
+    'published' => ['published', 'published'],
+    'archived' => ['archived', 'archived'],
+]);
+
+it('makes a foreign draft, an unknown id and an oversized id byte-identical on publish', function (): void {
+    $bodies = [];
+
+    foreach ([(string) $this->ids['draft'], '999999', '12345678901234567890'] as $id) {
+        $bodies[] = $this->actingAs($this->stranger, 'sanctum')
+            ->postJson('/api/v1/organizer/events/'.$id.'/publish')
+            ->assertStatus(404)
+            ->getContent();
+    }
+
+    expect($bodies[0])->toBe('{"error":{"code":"NOT_FOUND","message":"The requested resource was not found."}}')
+        ->and($bodies[1])->toBe($bodies[0])
+        ->and($bodies[2])->toBe($bodies[0])
+        ->and(DB::table('events')->where('id', $this->ids['draft'])->value('status'))->toBe('draft');
+});
+
+it('422 INVALID_SEAT_MAP_TEMPLATE for a malformed template, generating no rows', function (mixed $template): void {
+    DB::table('venues')->where('id', $this->ids['arena'])->update([
+        'seat_map_template' => json_encode($template, JSON_THROW_ON_ERROR),
+    ]);
+
+    $this->actingAs($this->owner, 'sanctum')
+        ->postJson('/api/v1/organizer/events/'.$this->ids['draft'].'/publish')
+        ->assertStatus(422)
+        ->assertJsonPath('error.code', 'INVALID_SEAT_MAP_TEMPLATE');
+
+    expect(DB::table('events')->where('id', $this->ids['draft'])->value('status'))->toBe('draft')
+        ->and(DB::table('event_seats')->where('event_id', $this->ids['draft'])->count())->toBe(0);
+})->with([
+    'the seeded empty template' => [['sections' => []]],
+    'no sections key' => [['rows' => 3]],
+    'sections not an array' => [['sections' => 'A']],
+    'a section without a name' => [['sections' => [['seats' => [['row' => 1, 'number' => 1, 'x' => 1, 'y' => 1, 'price_cents' => 1]]]]]],
+    'a section with an empty name' => [['sections' => [['name' => '', 'seats' => [['row' => 1, 'number' => 1, 'x' => 1, 'y' => 1, 'price_cents' => 1]]]]]],
+    'two sections with the same name' => [['sections' => [
+        ['name' => 'A', 'seats' => [['row' => 1, 'number' => 1, 'x' => 1, 'y' => 1, 'price_cents' => 1]]],
+        ['name' => 'A', 'seats' => [['row' => 2, 'number' => 1, 'x' => 1, 'y' => 1, 'price_cents' => 1]]],
+    ]]],
+    'an empty section' => [['sections' => [['name' => 'A', 'seats' => []]]]],
+    'a section with no seats key' => [['sections' => [['name' => 'A']]]],
+    'a seat missing x' => [['sections' => [['name' => 'A', 'seats' => [['row' => 1, 'number' => 1, 'y' => 1, 'price_cents' => 1]]]]]],
+    'a seat missing y' => [['sections' => [['name' => 'A', 'seats' => [['row' => 1, 'number' => 1, 'x' => 1, 'price_cents' => 1]]]]]],
+    'a seat missing price_cents' => [['sections' => [['name' => 'A', 'seats' => [['row' => 1, 'number' => 1, 'x' => 1, 'y' => 1]]]]]],
+    'a seat with a non integer coordinate' => [['sections' => [['name' => 'A', 'seats' => [['row' => 1, 'number' => 1, 'x' => '40', 'y' => 1, 'price_cents' => 1]]]]]],
+    'two seats at the same position in one section' => [['sections' => [['name' => 'A', 'seats' => [
+        ['row' => 1, 'number' => 1, 'x' => 1, 'y' => 1, 'price_cents' => 1],
+        ['row' => 1, 'number' => 1, 'x' => 2, 'y' => 2, 'price_cents' => 1],
+    ]]]]],
+]);
+
+it('accepts the same row and number in two different sections', function () use ($seatMap, $gridSection, $setTemplate): void {
+    $setTemplate($this->ids['arena'], $seatMap([$gridSection('A', 1, 2, 5000, 0), $gridSection('B', 1, 2, 3500, 200)]));
+
+    $this->actingAs($this->owner, 'sanctum')
+        ->postJson('/api/v1/organizer/events/'.$this->ids['draft'].'/publish')
+        ->assertStatus(200);
+
+    expect(DB::table('event_seats')->where('event_id', $this->ids['draft'])->count())->toBe(4);
+});
+
+it('generates a template larger than one insert batch in full', function () use ($seatMap, $gridSection, $setTemplate): void {
+    $setTemplate($this->ids['arena'], $seatMap([$gridSection('A', 30, 20, 5000, 0)]));
+
+    $this->actingAs($this->owner, 'sanctum')
+        ->postJson('/api/v1/organizer/events/'.$this->ids['draft'].'/publish')
+        ->assertStatus(200);
+
+    expect(DB::table('event_seats')->where('event_id', $this->ids['draft'])->count())->toBe(600)
+        ->and(DB::table('event_seats')->where('event_id', $this->ids['draft'])->where('row', 30)->count())->toBe(20);
+});
+
+it('leaves the event draft with no seats when generation fails part way through', function () use ($seatMap, $gridSection, $setTemplate) {
+    $template = $seatMap([$gridSection('A', 30, 20, 5000, 0)]);
+    $template['sections'][0]['seats'][549]['price_cents'] = 2147483648;
+    $setTemplate($this->ids['arena'], $template);
+
+    $this->actingAs($this->owner, 'sanctum')
+        ->postJson('/api/v1/organizer/events/'.$this->ids['draft'].'/publish')
+        ->assertStatus(500)
+        ->assertJsonPath('error.code', 'INTERNAL_ERROR');
+
+    expect(DB::table('events')->where('id', $this->ids['draft'])->value('status'))->toBe('draft')
+        ->and(DB::table('event_seats')->where('event_id', $this->ids['draft'])->count())->toBe(0);
+});
+
+it('emits event.published once, after the transaction, carrying every generated seat id', function () use ($seatMap, $gridSection, $setTemplate, $recordingPublisher): void {
+    $setTemplate($this->ids['arena'], $seatMap([$gridSection('A', 2, 3, 5000, 0)]));
+
+    $publisher = $recordingPublisher();
+    $this->instance(EventPublisherInterface::class, $publisher);
+
+    $this->actingAs($this->owner, 'sanctum')
+        ->postJson('/api/v1/organizer/events/'.$this->ids['draft'].'/publish')
+        ->assertStatus(200);
+
+    $seatIds = DB::table('event_seats')->where('event_id', $this->ids['draft'])->orderBy('id')->pluck('id')
+        ->map(fn (mixed $id): int => (int) $id)->all();
+
+    expect($publisher->emitted)->toHaveCount(1)
+        ->and($publisher->emitted[0]['event']->event_id)->toBe($this->ids['draft'])
+        ->and($publisher->emitted[0]['event']->seat_ids)->toBe($seatIds)
+        ->and($publisher->emitted[0]['level'])->toBe(DB::transactionLevel());
+});
+
+it('emits nothing when the transaction rolls back', function () use ($seatMap, $gridSection, $setTemplate, $recordingPublisher): void {
+    $template = $seatMap([$gridSection('A', 30, 20, 5000, 0)]);
+    $template['sections'][0]['seats'][549]['price_cents'] = 2147483648;
+    $setTemplate($this->ids['arena'], $template);
+
+    $publisher = $recordingPublisher();
+    $this->instance(EventPublisherInterface::class, $publisher);
+
+    $this->actingAs($this->owner, 'sanctum')
+        ->postJson('/api/v1/organizer/events/'.$this->ids['draft'].'/publish')
+        ->assertStatus(500);
+
+    expect($publisher->emitted)->toBe([]);
+});
+
+it('emits nothing when the template is rejected', function () use ($recordingPublisher): void {
+    $publisher = $recordingPublisher();
+    $this->instance(EventPublisherInterface::class, $publisher);
+
+    $this->actingAs($this->owner, 'sanctum')
+        ->postJson('/api/v1/organizer/events/'.$this->ids['draft'].'/publish')
+        ->assertStatus(422);
+
+    expect($publisher->emitted)->toBe([]);
 });

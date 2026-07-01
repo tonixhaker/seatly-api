@@ -78,6 +78,11 @@ $fakeEvents = function (?Event $owned = null): EventRepositoryInterface {
             return null;
         }
 
+        public function publishWithSeats(Event $event, array $seats): ?array
+        {
+            return null;
+        }
+
         public function persist(Event $event): void
         {
             $this->persisted++;
