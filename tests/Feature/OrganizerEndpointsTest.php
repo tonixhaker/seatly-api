@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Domain\User\Enums\UserRole;
 use App\Domain\User\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 
@@ -144,7 +145,7 @@ it('writes the created event to the database, owned by the caller and marked dra
         ->and($row->status)->toBe('draft')
         ->and($row->title)->toBe('Late Night Strings')
         ->and($row->description)->toBe('A short programme of chamber works.')
-        ->and($row->starts_at)->toBe('2027-05-01 19:00:00')
+        ->and(CarbonImmutable::parse((string) $row->starts_at)->utc()->toIso8601ZuluString())->toBe('2027-05-01T19:00:00Z')
         ->and((int) $row->venue_id)->toBe($this->ids['arena']);
 });
 
@@ -180,7 +181,8 @@ it('converts a starts_at offset to UTC instead of dropping it', function () use 
         ->assertStatus(201);
 
     expect($response->json('starts_at'))->toBe('2027-05-01T17:00:00Z')
-        ->and(DB::table('events')->where('id', $response->json('id'))->value('starts_at'))->toBe('2027-05-01 17:00:00');
+        ->and(CarbonImmutable::parse((string) DB::table('events')->where('id', $response->json('id'))->value('starts_at'))->utc()->toIso8601ZuluString())
+        ->toBe('2027-05-01T17:00:00Z');
 });
 
 it('keeps a description of "0", which a falsy check would turn into null', function () use ($eventPayload): void {
