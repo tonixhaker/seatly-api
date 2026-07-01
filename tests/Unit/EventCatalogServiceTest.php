@@ -79,6 +79,11 @@ $fakeRepository = function (?LengthAwarePaginator $page = null, ?Event $found = 
             return $this->seats;
         }
 
+        public function publishWithSeats(Event $event, array $seats): ?array
+        {
+            return null;
+        }
+
         public function persist(Event $event): void {}
     };
 };

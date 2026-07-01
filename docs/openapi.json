@@ -1524,8 +1524,8 @@
                             }
                         }
                     },
-                    "403": {
-                        "description": "FORBIDDEN",
+                    "404": {
+                        "description": "NOT_FOUND",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -1537,7 +1537,7 @@
                                                 "code": {
                                                     "type": "string",
                                                     "enum": [
-                                                        "FORBIDDEN"
+                                                        "NOT_FOUND"
                                                     ]
                                                 },
                                                 "message": {
@@ -1558,8 +1558,8 @@
                             }
                         }
                     },
-                    "404": {
-                        "description": "NOT_FOUND",
+                    "403": {
+                        "description": "FORBIDDEN",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -1571,7 +1571,7 @@
                                                 "code": {
                                                     "type": "string",
                                                     "enum": [
-                                                        "NOT_FOUND"
+                                                        "FORBIDDEN"
                                                     ]
                                                 },
                                                 "message": {
@@ -1623,6 +1623,40 @@
                                                     "required": [
                                                         "status"
                                                     ]
+                                                }
+                                            },
+                                            "required": [
+                                                "code",
+                                                "message"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "error"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "INVALID_SEAT_MAP_TEMPLATE",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "type": "object",
+                                            "properties": {
+                                                "code": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "INVALID_SEAT_MAP_TEMPLATE"
+                                                    ]
+                                                },
+                                                "message": {
+                                                    "type": "string",
+                                                    "description": "One human-readable sentence, safe to show a user."
                                                 }
                                             },
                                             "required": [
