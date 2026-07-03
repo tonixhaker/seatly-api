@@ -6,6 +6,7 @@ parameters:
     paths:
         - app
         - bootstrap
+        - database/seeders
     excludePaths:
         analyseAndScan:
             - bootstrap/cache
