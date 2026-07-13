@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace App\Domain\Event\Services;
 
-use App\Domain\Event\Contracts\EventPublisherInterface;
 use App\Domain\Event\DTO\EventData;
 use App\Domain\Event\DTO\SeatBlueprint;
 use App\Domain\Event\Enums\EventStatus;
 use App\Domain\Event\Events\EventPublished;
 use App\Domain\Event\Exceptions\InvalidEventTransitionException;
 use App\Domain\Event\Repositories\EventRepositoryInterface;
+use App\Domain\Shared\Contracts\EventPublisherInterface;
 use App\Domain\Venue\Exceptions\InvalidSeatMapTemplateException;
 
 final readonly class EventPublishService

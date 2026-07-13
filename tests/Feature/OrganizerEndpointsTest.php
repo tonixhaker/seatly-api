@@ -2,8 +2,9 @@
 
 declare(strict_types=1);
 
-use App\Domain\Event\Contracts\EventPublisherInterface;
 use App\Domain\Event\Events\EventPublished;
+use App\Domain\Shared\Contracts\DomainEvent;
+use App\Domain\Shared\Contracts\EventPublisherInterface;
 use App\Domain\User\Enums\UserRole;
 use App\Domain\User\Models\User;
 use Carbon\CarbonImmutable;
@@ -566,7 +567,7 @@ $recordingPublisher = function (): EventPublisherInterface {
         /** @var list<array{event: EventPublished, level: int}> */
         public array $emitted = [];
 
-        public function publish(EventPublished $event): void
+        public function publish(DomainEvent $event): void
         {
             $this->emitted[] = ['event' => $event, 'level' => DB::transactionLevel()];
         }

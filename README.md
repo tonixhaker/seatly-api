@@ -41,9 +41,13 @@ Serves on `http://localhost:8000`. `GET /health/live` answers without a database
 
 ### Without Docker
 
-Needs PHP 8.4, Composer, PostgreSQL 17, and a reachable `seatly-realtime` for checkout.
-`.env.example` expects Postgres on `127.0.0.1:5432` with database, user and password all
-`seatly`:
+Needs PHP 8.4 **with `ext-sockets`**, Composer, PostgreSQL 17, and a reachable
+`seatly-realtime` for checkout. `php-amqplib` requires `ext-sockets`; the Docker image
+builds it in, but a host PHP without it needs
+`composer install --ignore-platform-req=ext-sockets`, which is also how every containerised
+`composer` command here runs, since the `composer:latest` image does not ship the
+extension. `.env.example` expects Postgres on `127.0.0.1:5432` with database, user and
+password all `seatly`:
 
 ```bash
 docker run -d -p 5432:5432 \
@@ -108,6 +112,34 @@ docker run --rm -v "$PWD":/var/www/html -w /var/www/html \
   -e DB_HOST=postgres -e DB_USERNAME=seatly -e DB_PASSWORD=seatly \
   seatly-api vendor/bin/pest
 ```
+
+One test needs a live broker: `RabbitMqPublisherIntegrationTest` publishes a real message
+and consumes it back to prove the routing key is the event type. It **skips** when
+`RABBITMQ_TEST_URL` is unset, so add it when the Compose stack is up:
+
+```bash
+-e RABBITMQ_TEST_URL=amqp://seatly:seatly@rabbitmq:5672
+```
+
+CI sets the same variable against its own broker service, so the test is gated there rather
+than only run by hand.
+
+`phpunit.xml` forces `RABBITMQ_URL` empty, which keeps every other test on the logging
+publisher. Without that force, a developer whose `.env` points at a running broker would
+publish real messages during the suite while CI did not.
+
+### Messaging
+
+Domain events go to the topic exchange `seatly.events`, routed on the event type, in the
+envelope frozen in `docs/events/envelope.json`. Every outgoing message is validated against
+its own schema in `docs/events/` **before** the connection is opened: an envelope the
+contract rejects is a producer bug and throws, while an unreachable broker is an
+environment condition and is logged rather than raised — publishing must never take a
+request down, and a missed message is repaired by the consumer's reconciliation path.
+
+`EventPublisherInterface` binds to `RabbitMqEventPublisher` when `RABBITMQ_URL` is set and
+to `LoggingEventPublisher` when it is empty. Both validate; the logging one is the
+no-broker implementation, not a weaker path.
 
 Do not pass `-e DB_DATABASE` — that is what keeps the wipe aimed at `seatly_test`.
 

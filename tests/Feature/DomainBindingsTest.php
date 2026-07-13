@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use App\Domain\Event\Contracts\EventPublisherInterface;
 use App\Domain\Event\DTO\EventFilter;
 use App\Domain\Event\Enums\EventStatus;
 use App\Domain\Event\Models\Event;
@@ -10,6 +9,7 @@ use App\Domain\Event\Repositories\EventRepositoryInterface;
 use App\Domain\Event\Services\EventCatalogService;
 use App\Domain\Event\Services\EventDraftService;
 use App\Domain\Event\Services\EventPublishService;
+use App\Domain\Shared\Contracts\EventPublisherInterface;
 use App\Domain\User\Repositories\UserRepositoryInterface;
 use App\Domain\Venue\Models\Venue;
 use App\Domain\Venue\Repositories\VenueRepositoryInterface;
