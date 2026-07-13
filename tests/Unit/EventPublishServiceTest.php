@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use App\Domain\Event\Contracts\EventPublisherInterface;
 use App\Domain\Event\DTO\EventFilter;
 use App\Domain\Event\DTO\SeatBlueprint;
 use App\Domain\Event\Enums\EventStatus;
@@ -12,6 +11,8 @@ use App\Domain\Event\Models\Event;
 use App\Domain\Event\Models\EventSeat;
 use App\Domain\Event\Repositories\EventRepositoryInterface;
 use App\Domain\Event\Services\EventPublishService;
+use App\Domain\Shared\Contracts\DomainEvent;
+use App\Domain\Shared\Contracts\EventPublisherInterface;
 use App\Domain\Venue\Exceptions\InvalidSeatMapTemplateException;
 use App\Domain\Venue\Models\Venue;
 use Illuminate\Database\Eloquent\Collection;
@@ -107,7 +108,7 @@ $fakePublisher = function (): EventPublisherInterface {
         /** @var list<EventPublished> */
         public array $emitted = [];
 
-        public function publish(EventPublished $event): void
+        public function publish(DomainEvent $event): void
         {
             $this->emitted[] = $event;
         }

@@ -4,19 +4,23 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Messaging;
 
-use App\Domain\Event\Contracts\EventPublisherInterface;
-use App\Domain\Event\Events\EventPublished;
+use App\Domain\Shared\Contracts\DomainEvent;
+use App\Domain\Shared\Contracts\EventPublisherInterface;
 use Psr\Log\LoggerInterface;
 
-final class LoggingEventPublisher implements EventPublisherInterface
+final readonly class LoggingEventPublisher implements EventPublisherInterface
 {
-    public function __construct(private readonly LoggerInterface $logger) {}
+    public function __construct(
+        private LoggerInterface $logger,
+        private EnvelopeSchemaValidator $validator,
+    ) {}
 
-    public function publish(EventPublished $event): void
+    public function publish(DomainEvent $event): void
     {
-        $this->logger->info(EventPublished::TYPE, [
-            'event_id' => $event->event_id,
-            'seat_ids' => $event->seat_ids,
-        ]);
+        $envelope = EventEnvelope::for($event);
+
+        $this->validator->assertValid($envelope);
+
+        $this->logger->info($envelope->event_type, $envelope->toArray());
     }
 }

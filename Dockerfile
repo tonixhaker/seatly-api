@@ -3,8 +3,8 @@ FROM php:8.4.25-fpm-alpine
 COPY --from=composer/composer:2.9.3-bin /composer /usr/bin/composer
 
 RUN apk add --no-cache nginx supervisor curl libpq \
-    && apk add --no-cache --virtual .build-deps postgresql-dev \
-    && docker-php-ext-install -j"$(nproc)" pdo_pgsql \
+    && apk add --no-cache --virtual .build-deps postgresql-dev linux-headers \
+    && docker-php-ext-install -j"$(nproc)" pdo_pgsql sockets \
     && apk del .build-deps \
     && mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
 
