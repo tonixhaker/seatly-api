@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Domain\Event\Repositories\EventRepositoryInterface;
+use App\Domain\Order\Contracts\HoldsValidatorInterface;
 use App\Domain\Order\Contracts\PaymentGatewayInterface;
 use App\Domain\Shared\Contracts\EventPublisherInterface;
 use App\Domain\User\Repositories\UserRepositoryInterface;
@@ -16,7 +17,9 @@ use App\Infrastructure\Payments\FakePaymentGateway;
 use App\Infrastructure\Persistence\EloquentEventRepository;
 use App\Infrastructure\Persistence\EloquentUserRepository;
 use App\Infrastructure\Persistence\EloquentVenueRepository;
+use App\Infrastructure\Realtime\HttpHoldsValidator;
 use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Http\Client\Factory;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\ServiceProvider;
 use PhpAmqpLib\Connection\AMQPStreamConnection;
@@ -43,6 +46,16 @@ final class DomainServiceProvider extends ServiceProvider
                 Config::integer('payments.fake.delay_min_ms'),
                 Config::integer('payments.fake.delay_max_ms'),
                 Config::float('payments.fake.decline_rate'),
+            );
+        });
+
+        $this->app->singleton(HoldsValidatorInterface::class, static function (Application $app): HoldsValidatorInterface {
+            return new HttpHoldsValidator(
+                $app->make(Factory::class),
+                Config::string('realtime.base_url'),
+                Config::string('realtime.internal_token'),
+                Config::float('realtime.timeout_seconds'),
+                $app->make(LoggerInterface::class),
             );
         });
 

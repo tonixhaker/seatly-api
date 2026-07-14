@@ -124,9 +124,28 @@ and consumes it back to prove the routing key is the event type. It **skips** wh
 CI sets the same variable against its own broker service, so the test is gated there rather
 than only run by hand.
 
-`phpunit.xml` forces `RABBITMQ_URL` empty, which keeps every other test on the logging
-publisher. Without that force, a developer whose `.env` points at a running broker would
-publish real messages during the suite while CI did not.
+Six tests need a live `seatly-realtime`: `HoldsValidatorIntegrationTest` takes real holds
+through `POST /holds` and checks them back through `GET /internal/holds/validate`, including
+the different-session and different-event cases a stub cannot distinguish. They **skip**
+when `REALTIME_TEST_URL` is unset:
+
+```bash
+-e REALTIME_TEST_URL=http://realtime:3000 -e INTERNAL_TOKEN=local-internal-token
+```
+
+CI has no realtime service, so these six skip there; the timeout is covered unconditionally
+by `tests/Unit/HttpHoldsValidatorTest.php` against a socket that never answers.
+
+`phpunit.xml` forces `RABBITMQ_URL` empty and `REALTIME_URL` to `http://realtime.invalid`,
+which keeps every other test on the logging publisher and on a faked HTTP client. Without
+those forces, a developer whose `.env` points at a running broker or realtime would publish
+real messages and make real validation calls during the suite while CI did not.
+
+`REALTIME_URL` is where `seatly-api` reaches `seatly-realtime` for hold validation at
+checkout, and `INTERNAL_TOKEN` is the shared secret for that call. Compose supplies the
+first and passes the second through `env_file: .env`. The token is sent as the
+`X-Internal-Token` header and never as a query parameter, so it stays out of URLs, logs and
+exception messages.
 
 ### Messaging
 

@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 use App\Domain\User\Enums\UserRole;
 use App\Domain\User\Models\User;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Log\Events\MessageLogged;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 function buyerUser(): User
 {
@@ -19,6 +23,26 @@ function orderPayload(array $overrides = []): array
         'idempotency_key' => 'key-abc',
     ], $overrides);
 }
+
+$holds = new stdClass;
+
+$fakeHolds = static function (mixed $body, int $status = 200) use ($holds): void {
+    $holds->body = $body;
+    $holds->status = $status;
+};
+
+beforeEach(function () use ($holds, $fakeHolds): void {
+    $fakeHolds(['valid' => true, 'missing' => []]);
+
+    Http::preventStrayRequests();
+    Http::fake(function () use ($holds): mixed {
+        if ($holds->body instanceof Closure) {
+            return ($holds->body)();
+        }
+
+        return Http::response($holds->body, $holds->status);
+    });
+});
 
 it('factory make casts the role attribute to the UserRole enum', function (): void {
     expect(buyerUser()->getAttribute('role'))->toBe(UserRole::Buyer);
@@ -51,12 +75,126 @@ it('201 with the exact order shape and no session_id', function (): void {
         ->not->toContain('11111111-2222-4333-8444-555555555555');
 });
 
-it('SEATS_NOT_HELD reports only the missing seats', function (): void {
+it('SEATS_NOT_HELD reports only the missing seats realtime named', function () use ($fakeHolds): void {
+    $fakeHolds(['valid' => false, 'missing' => [3, 7]]);
+
     $this->actingAs(buyerUser(), 'sanctum')
         ->postJson('/api/v1/orders', orderPayload(['seat_ids' => [1, 3, 7]]))
         ->assertStatus(422)
         ->assertJsonPath('error.code', 'SEATS_NOT_HELD')
         ->assertJsonPath('error.details.seats', [3, 7]);
+});
+
+it('asks realtime with the event, seats and session the buyer actually sent', function (): void {
+    $sessionId = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
+
+    $this->actingAs(buyerUser(), 'sanctum')->postJson('/api/v1/orders', orderPayload([
+        'event_id' => 4242,
+        'seat_ids' => [11, 5],
+        'session_id' => $sessionId,
+    ]))->assertStatus(201);
+
+    Http::assertSent(function ($request) use ($sessionId): bool {
+        $url = $request->url();
+
+        expect($url)->toContain('event_id=4242')
+            ->and($url)->toContain('seat_ids=11&seat_ids=5')
+            ->and($url)->toContain('session_id='.$sessionId)
+            ->and($url)->not->toContain('%5B');
+
+        return true;
+    });
+});
+
+it('answers 503 SERVICE_UNAVAILABLE when realtime is unreachable, never 500 or SEATS_NOT_HELD', function () use ($fakeHolds): void {
+    $fakeHolds(fn (): never => throw new ConnectionException('cURL error 7: Failed to connect'));
+
+    $response = $this->actingAs(buyerUser(), 'sanctum')
+        ->postJson('/api/v1/orders', orderPayload())
+        ->assertStatus(503);
+
+    expect($response->json('error.code'))->toBe('SERVICE_UNAVAILABLE')
+        ->and($response->json('error.code'))->not->toBe('SEATS_NOT_HELD')
+        ->and(array_keys((array) $response->json('error')))->toBe(['code', 'message']);
+});
+
+it('answers 503 on a 401 from realtime, with a body identical to the outage', function () use ($fakeHolds): void {
+    $fakeHolds(['error' => ['code' => 'UNAUTHENTICATED']], 401);
+
+    $unauthorized = $this->actingAs(buyerUser(), 'sanctum')
+        ->postJson('/api/v1/orders', orderPayload())->assertStatus(503);
+
+    $fakeHolds(fn (): never => throw new ConnectionException('cURL error 7: Failed to connect'));
+
+    $unreachable = $this->actingAs(buyerUser(), 'sanctum')
+        ->postJson('/api/v1/orders', orderPayload())->assertStatus(503);
+
+    expect($unauthorized->json('error'))->toBe($unreachable->json('error'))
+        ->and($unauthorized->json('error.code'))->toBe('SERVICE_UNAVAILABLE');
+});
+
+it('distinguishes a wrong token from a missing seat in the log, not in the body', function () use ($fakeHolds): void {
+    $records = [];
+    Log::listen(function (MessageLogged $entry) use (&$records): void {
+        $records[] = $entry;
+    });
+
+    $fakeHolds(['error' => ['code' => 'UNAUTHENTICATED']], 401);
+    $unauthorized = $this->actingAs(buyerUser(), 'sanctum')
+        ->postJson('/api/v1/orders', orderPayload())->assertStatus(503);
+
+    $flagged = array_values(array_filter(
+        $records,
+        static fn (MessageLogged $entry): bool => ($entry->context['reason'] ?? null) === 'unauthorized',
+    ));
+
+    expect($flagged)->toHaveCount(1)
+        ->and($flagged[0]->level)->toBe('error')
+        ->and($flagged[0]->context['status'])->toBe(401);
+
+    $records = [];
+
+    $fakeHolds(['valid' => false, 'missing' => [3]]);
+    $missing = $this->actingAs(buyerUser(), 'sanctum')
+        ->postJson('/api/v1/orders', orderPayload())->assertStatus(422);
+
+    expect(array_filter(
+        $records,
+        static fn (MessageLogged $entry): bool => isset($entry->context['reason']),
+    ))->toBe([])
+        ->and($missing->json('error.code'))->toBe('SEATS_NOT_HELD')
+        ->and($unauthorized->json('error.code'))->toBe('SERVICE_UNAVAILABLE');
+});
+
+it('leaks the internal token into no response body and no log record', function () use ($fakeHolds): void {
+    $token = 'grep-for-this-internal-token';
+    config(['realtime.internal_token' => $token]);
+
+    $records = [];
+    Log::listen(function (MessageLogged $entry) use (&$records): void {
+        $records[] = $entry;
+    });
+
+    $bodies = [];
+
+    $fakeHolds(['error' => ['code' => 'UNAUTHENTICATED']], 401);
+    $bodies[] = $this->actingAs(buyerUser(), 'sanctum')->postJson('/api/v1/orders', orderPayload())->getContent();
+
+    $fakeHolds(fn (): never => throw new ConnectionException('cURL error 7: Failed to connect'));
+    $bodies[] = $this->actingAs(buyerUser(), 'sanctum')->postJson('/api/v1/orders', orderPayload())->getContent();
+
+    $fakeHolds(['valid' => false, 'missing' => [3]]);
+    $bodies[] = $this->actingAs(buyerUser(), 'sanctum')->postJson('/api/v1/orders', orderPayload())->getContent();
+
+    foreach ($bodies as $body) {
+        expect((string) $body)->not->toContain($token);
+    }
+
+    foreach ($records as $entry) {
+        expect(json_encode([$entry->message, $entry->context], JSON_THROW_ON_ERROR))->not->toContain($token);
+    }
+
+    expect($records)->not->toBe([]);
 });
 
 it('validation failures', function (array $overrides, string $field): void {

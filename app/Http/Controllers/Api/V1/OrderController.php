@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Order\Contracts\HoldsValidatorInterface;
 use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Order\Exceptions\PaymentDeclinedException;
 use App\Domain\Order\Exceptions\SeatsNotHeldException;
@@ -25,7 +26,7 @@ final class OrderController extends Controller
 {
     private const ORDER_ID = '3f1b8c42-5d6e-4a7b-9c10-2e4f6a8b0d13';
 
-    private const UNHELD_SEAT_IDS = [3, 7, 11];
+    public function __construct(private readonly HoldsValidatorInterface $holds) {}
 
     /**
      * Place an order for the seats this session holds.
@@ -36,17 +37,21 @@ final class OrderController extends Controller
      */
     public function store(PlaceOrderRequest $request): JsonResponse
     {
-        $seatIds = array_map(
+        $seatIds = array_values(array_map(
             static fn (mixed $seatId): int => is_numeric($seatId) ? (int) $seatId : 0,
             (array) $request->validated('seat_ids'),
+        ));
+
+        $missing = $this->holds->missingSeats(
+            $request->integer('event_id'),
+            $seatIds,
+            $request->string('session_id')->toString(),
         );
 
-        $unheld = array_values(array_intersect($seatIds, self::UNHELD_SEAT_IDS));
-
-        if ($unheld !== []) {
+        if ($missing !== []) {
             throw new SeatsNotHeldException(
                 'The session no longer holds every requested seat.',
-                ['seats' => $unheld],
+                ['seats' => $missing],
             );
         }
 

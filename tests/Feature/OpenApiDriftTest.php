@@ -4,8 +4,18 @@ declare(strict_types=1);
 
 use App\Domain\User\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 
 uses(RefreshDatabase::class);
+
+$driftHolds = new stdClass;
+
+beforeEach(function () use ($driftHolds): void {
+    $driftHolds->body = ['valid' => true, 'missing' => []];
+
+    Http::preventStrayRequests();
+    Http::fake(fn (): mixed => Http::response($driftHolds->body, 200));
+});
 
 function driftSpec(): array
 {
@@ -104,7 +114,9 @@ it('documents exactly the keys POST /organizer/check-in really returns', functio
     expect(driftActualKeys($body))->toEqualCanonicalizing(driftDocumentedKeys('post', '/api/v1/organizer/check-in', '200'));
 });
 
-it('documents the real SEATS_NOT_HELD details payload', function (): void {
+it('documents the real SEATS_NOT_HELD details payload', function () use ($driftHolds): void {
+    $driftHolds->body = ['valid' => false, 'missing' => [3, 7]];
+
     $body = $this->actingAs(driftBuyer(), 'sanctum')->postJson('/api/v1/orders', [
         'event_id' => 1,
         'seat_ids' => [1, 3, 7],

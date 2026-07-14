@@ -9,6 +9,7 @@ use App\Domain\Event\Repositories\EventRepositoryInterface;
 use App\Domain\Event\Services\EventCatalogService;
 use App\Domain\Event\Services\EventDraftService;
 use App\Domain\Event\Services\EventPublishService;
+use App\Domain\Order\Contracts\HoldsValidatorInterface;
 use App\Domain\Shared\Contracts\EventPublisherInterface;
 use App\Domain\User\Repositories\UserRepositoryInterface;
 use App\Domain\Venue\Models\Venue;
@@ -17,9 +18,11 @@ use App\Infrastructure\Messaging\LoggingEventPublisher;
 use App\Infrastructure\Persistence\EloquentEventRepository;
 use App\Infrastructure\Persistence\EloquentUserRepository;
 use App\Infrastructure\Persistence\EloquentVenueRepository;
+use App\Infrastructure\Realtime\HttpHoldsValidator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Pagination\LengthAwarePaginator;
+use ReflectionProperty;
 
 uses(RefreshDatabase::class);
 
@@ -29,6 +32,7 @@ it('resolves every domain interface through the container', function (string $in
     'events' => [EventRepositoryInterface::class, EloquentEventRepository::class],
     'venues' => [VenueRepositoryInterface::class, EloquentVenueRepository::class],
     'users' => [UserRepositoryInterface::class, EloquentUserRepository::class],
+    'holds validator' => [HoldsValidatorInterface::class, HttpHoldsValidator::class],
     'event publisher' => [EventPublisherInterface::class, LoggingEventPublisher::class],
 ]);
 
@@ -93,4 +97,26 @@ it('changes the service behaviour when the implementation binding is swapped', f
     });
 
     expect(app(EventCatalogService::class)->findPublished(1)?->title)->toBe('Swapped In');
+});
+
+it('wires the configured realtime url, token and timeout into the bound validator', function (): void {
+    config([
+        'realtime.base_url' => 'http://realtime.example:3000',
+        'realtime.internal_token' => 'a-configured-token',
+        'realtime.timeout_seconds' => 3.5,
+    ]);
+    app()->forgetInstance(HoldsValidatorInterface::class);
+
+    $validator = app(HoldsValidatorInterface::class);
+
+    $read = static fn (string $property): mixed => (new ReflectionProperty(HttpHoldsValidator::class, $property))->getValue($validator);
+
+    expect($read('baseUrl'))->toBe('http://realtime.example:3000')
+        ->and($read('internalToken'))->toBe('a-configured-token')
+        ->and($read('timeoutSeconds'))->toBe(3.5);
+});
+
+it('defaults the checkout timeout to two seconds, shorter than the payment delay', function (): void {
+    expect(require base_path('config/realtime.php'))
+        ->toMatchArray(['timeout_seconds' => 2.0]);
 });
