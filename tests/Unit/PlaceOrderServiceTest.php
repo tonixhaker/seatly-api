@@ -15,6 +15,7 @@ use App\Domain\Order\Repositories\OrderRepositoryInterface;
 use App\Domain\Order\Services\PlaceOrderService;
 use App\Domain\Shared\Contracts\DomainEvent;
 use App\Domain\Shared\Contracts\EventPublisherInterface;
+use App\Domain\Ticket\DTO\TicketData;
 
 $orderData = function (OrderStatus $status = OrderStatus::Paid): OrderData {
     return new OrderData(
@@ -49,6 +50,19 @@ $repository = function (?OrderData $replay, ?PlacedOrder $placed): OrderReposito
             $this->lookups++;
 
             return $this->replay;
+        }
+
+        public function findOwnedByBuyer(string $orderId, int $buyerId): ?OrderData
+        {
+            return null;
+        }
+
+        /**
+         * @return list<TicketData>
+         */
+        public function ticketsForBuyer(int $buyerId): array
+        {
+            return [];
         }
 
         public function place(PlaceOrderData $order): PlacedOrder

@@ -15,8 +15,10 @@ use App\Domain\Order\Exceptions\DuplicateIdempotencyKeyException;
 use App\Domain\Order\Exceptions\MixedCurrencyOrderException;
 use App\Domain\Order\Exceptions\SeatsNotHeldException;
 use App\Domain\Order\Repositories\OrderRepositoryInterface;
+use App\Domain\Ticket\DTO\TicketData;
 use App\Domain\Ticket\Enums\TicketStatus;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Random\Randomizer;
@@ -43,6 +45,47 @@ final readonly class EloquentOrderRepository implements OrderRepositoryInterface
             ->first();
 
         return $order === null ? null : self::hydrate((array) $order);
+    }
+
+    public function findOwnedByBuyer(string $orderId, int $buyerId): ?OrderData
+    {
+        $order = DB::table('orders')
+            ->where('id', $orderId)
+            ->where('buyer_id', $buyerId)
+            ->first();
+
+        return $order === null ? null : self::hydrate((array) $order);
+    }
+
+    public function ticketsForBuyer(int $buyerId): array
+    {
+        return array_values(DB::table('tickets')
+            ->join('orders', 'orders.id', '=', 'tickets.order_id')
+            ->where('orders.buyer_id', $buyerId)
+            ->orderBy('tickets.created_at')
+            ->orderBy('tickets.event_seat_id')
+            ->orderBy('tickets.id')
+            ->get([
+                'tickets.id',
+                'tickets.order_id',
+                'tickets.event_seat_id',
+                'tickets.qr_code',
+                'tickets.status',
+                'tickets.checked_in_at',
+            ])
+            ->map(static function (mixed $ticket): TicketData {
+                $row = (array) $ticket;
+
+                return new TicketData(
+                    self::text($row['id'] ?? null),
+                    self::text($row['order_id'] ?? null),
+                    self::number($row['event_seat_id'] ?? null),
+                    self::text($row['qr_code'] ?? null),
+                    self::text($row['status'] ?? null),
+                    self::timestamp($row['checked_in_at'] ?? null),
+                );
+            })
+            ->all());
     }
 
     public function place(PlaceOrderData $order): PlacedOrder
@@ -268,5 +311,16 @@ final readonly class EloquentOrderRepository implements OrderRepositoryInterface
     private static function text(mixed $value): string
     {
         return is_string($value) ? $value : throw new RuntimeException('A stored text column is not a string.');
+    }
+
+    private static function timestamp(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        return is_string($value)
+            ? Carbon::parse($value, 'UTC')->toIso8601ZuluString()
+            : throw new RuntimeException('A stored timestamp column is not a string.');
     }
 }
