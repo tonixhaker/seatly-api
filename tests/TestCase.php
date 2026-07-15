@@ -40,6 +40,51 @@ abstract class TestCase extends BaseTestCase
         ];
     }
 
+    /**
+     * @return array{buyer: User, event: int, seats: list<int>, price: int, spare: list<int>}
+     */
+    protected function seedPurchasable(int $seats = 2, int $spare = 1, int $priceCents = 7300, string $currency = 'EUR'): array
+    {
+        $organizer = User::factory()->create(['role' => UserRole::Organizer]);
+        $buyer = User::factory()->create(['role' => UserRole::Buyer]);
+
+        $venue = $this->insertVenue('Riverside Arena', '14 Quay Street', 'Rotterdam');
+        $event = $this->insertEvent($organizer->id, $venue, 'Contended Gala', null, '2027-03-04 18:00:00', 'published');
+
+        $rows = [];
+
+        for ($number = 1; $number <= $seats + $spare; $number++) {
+            $rows[] = [
+                'event_id' => $event,
+                'section' => 'A',
+                'row' => 1,
+                'number' => $number,
+                'x' => $number * 40,
+                'y' => 40,
+                'price_cents' => $priceCents,
+                'currency' => $currency,
+                'status' => 'free',
+            ];
+        }
+
+        DB::table('event_seats')->insert($rows);
+
+        $all = DB::table('event_seats')
+            ->where('event_id', $event)
+            ->orderBy('id')
+            ->pluck('id')
+            ->map(fn (mixed $id): int => (int) $id)
+            ->all();
+
+        return [
+            'buyer' => $buyer,
+            'event' => $event,
+            'seats' => array_values(array_slice($all, 0, $seats)),
+            'price' => $priceCents,
+            'spare' => array_values(array_slice($all, $seats)),
+        ];
+    }
+
     private function insertVenue(string $name, string $address, string $city): int
     {
         return (int) DB::table('venues')->insertGetId([

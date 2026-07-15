@@ -20,6 +20,7 @@ use Dedoc\Scramble\Support\Type\Type;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Validation\ValidationException;
 use ReflectionClass;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
@@ -57,6 +58,7 @@ final class ErrorEnvelopeToResponseExtension extends ExceptionToResponseExtensio
             $type->isInstanceOf(AuthenticationException::class) => ErrorCode::UNAUTHENTICATED,
             $type->isInstanceOf(AuthorizationException::class), $type->isInstanceOf(AccessDeniedHttpException::class) => ErrorCode::FORBIDDEN,
             $type->isInstanceOf(ModelNotFoundException::class), $type->isInstanceOf(NotFoundHttpException::class) => ErrorCode::NOT_FOUND,
+            $type->isInstanceOf(ThrottleRequestsException::class) => ErrorCode::RATE_LIMITED,
             $type->isInstanceOf(HttpException::class) => self::fromStatus(self::statusOf($type)),
             default => null,
         };

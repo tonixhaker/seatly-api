@@ -56,6 +56,40 @@
                             }
                         }
                     },
+                    "429": {
+                        "description": "RATE_LIMITED",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "type": "object",
+                                            "properties": {
+                                                "code": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "RATE_LIMITED"
+                                                    ]
+                                                },
+                                                "message": {
+                                                    "type": "string",
+                                                    "description": "One human-readable sentence, safe to show a user."
+                                                }
+                                            },
+                                            "required": [
+                                                "code",
+                                                "message"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "error"
+                                    ]
+                                }
+                            }
+                        }
+                    },
                     "422": {
                         "description": "VALIDATION_FAILED",
                         "content": {
@@ -139,6 +173,40 @@
                                     "required": [
                                         "token",
                                         "user"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "RATE_LIMITED",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "type": "object",
+                                            "properties": {
+                                                "code": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "RATE_LIMITED"
+                                                    ]
+                                                },
+                                                "message": {
+                                                    "type": "string",
+                                                    "description": "One human-readable sentence, safe to show a user."
+                                                }
+                                            },
+                                            "required": [
+                                                "code",
+                                                "message"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "error"
                                     ]
                                 }
                             }
@@ -700,6 +768,50 @@
                             }
                         }
                     },
+                    "200": {
+                        "description": "`OrderResource`",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/OrderResource"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "FORBIDDEN",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "type": "object",
+                                            "properties": {
+                                                "code": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "FORBIDDEN"
+                                                    ]
+                                                },
+                                                "message": {
+                                                    "type": "string",
+                                                    "description": "One human-readable sentence, safe to show a user."
+                                                }
+                                            },
+                                            "required": [
+                                                "code",
+                                                "message"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "error"
+                                    ]
+                                }
+                            }
+                        }
+                    },
                     "422": {
                         "description": "SEATS_NOT_HELD\n\nVALIDATION_FAILED",
                         "content": {
@@ -790,8 +902,8 @@
                             }
                         }
                     },
-                    "403": {
-                        "description": "FORBIDDEN",
+                    "402": {
+                        "description": "PAYMENT_DECLINED",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -803,7 +915,7 @@
                                                 "code": {
                                                     "type": "string",
                                                     "enum": [
-                                                        "FORBIDDEN"
+                                                        "PAYMENT_DECLINED"
                                                     ]
                                                 },
                                                 "message": {
@@ -824,8 +936,8 @@
                             }
                         }
                     },
-                    "402": {
-                        "description": "PAYMENT_DECLINED",
+                    "503": {
+                        "description": "SERVICE_UNAVAILABLE",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -837,7 +949,7 @@
                                                 "code": {
                                                     "type": "string",
                                                     "enum": [
-                                                        "PAYMENT_DECLINED"
+                                                        "SERVICE_UNAVAILABLE"
                                                     ]
                                                 },
                                                 "message": {

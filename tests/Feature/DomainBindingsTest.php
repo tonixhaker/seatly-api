@@ -10,12 +10,14 @@ use App\Domain\Event\Services\EventCatalogService;
 use App\Domain\Event\Services\EventDraftService;
 use App\Domain\Event\Services\EventPublishService;
 use App\Domain\Order\Contracts\HoldsValidatorInterface;
+use App\Domain\Order\Repositories\OrderRepositoryInterface;
 use App\Domain\Shared\Contracts\EventPublisherInterface;
 use App\Domain\User\Repositories\UserRepositoryInterface;
 use App\Domain\Venue\Models\Venue;
 use App\Domain\Venue\Repositories\VenueRepositoryInterface;
 use App\Infrastructure\Messaging\LoggingEventPublisher;
 use App\Infrastructure\Persistence\EloquentEventRepository;
+use App\Infrastructure\Persistence\EloquentOrderRepository;
 use App\Infrastructure\Persistence\EloquentUserRepository;
 use App\Infrastructure\Persistence\EloquentVenueRepository;
 use App\Infrastructure\Realtime\HttpHoldsValidator;
@@ -33,6 +35,7 @@ it('resolves every domain interface through the container', function (string $in
     'venues' => [VenueRepositoryInterface::class, EloquentVenueRepository::class],
     'users' => [UserRepositoryInterface::class, EloquentUserRepository::class],
     'holds validator' => [HoldsValidatorInterface::class, HttpHoldsValidator::class],
+    'orders' => [OrderRepositoryInterface::class, EloquentOrderRepository::class],
     'event publisher' => [EventPublisherInterface::class, LoggingEventPublisher::class],
 ]);
 

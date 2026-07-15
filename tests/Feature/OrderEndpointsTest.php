@@ -2,16 +2,21 @@
 
 declare(strict_types=1);
 
+use App\Domain\Order\Contracts\PaymentGatewayInterface;
+use App\Domain\Order\DTO\PaymentResult;
 use App\Domain\User\Enums\UserRole;
 use App\Domain\User\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Log\Events\MessageLogged;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
+uses(RefreshDatabase::class);
+
 function buyerUser(): User
 {
-    return User::factory()->make(['role' => 'buyer']);
+    return User::factory()->create(['role' => 'buyer']);
 }
 
 function orderPayload(array $overrides = []): array
@@ -24,6 +29,16 @@ function orderPayload(array $overrides = []): array
     ], $overrides);
 }
 
+$approveEveryCharge = static function (): void {
+    app()->instance(PaymentGatewayInterface::class, new class implements PaymentGatewayInterface
+    {
+        public function charge(int $amountCents, string $currency): PaymentResult
+        {
+            return PaymentResult::approved($amountCents, $currency);
+        }
+    });
+};
+
 $holds = new stdClass;
 
 $fakeHolds = static function (mixed $body, int $status = 200) use ($holds): void {
@@ -31,8 +46,9 @@ $fakeHolds = static function (mixed $body, int $status = 200) use ($holds): void
     $holds->status = $status;
 };
 
-beforeEach(function () use ($holds, $fakeHolds): void {
+beforeEach(function () use ($holds, $fakeHolds, $approveEveryCharge): void {
     $fakeHolds(['valid' => true, 'missing' => []]);
+    $approveEveryCharge();
 
     Http::preventStrayRequests();
     Http::fake(function () use ($holds): mixed {
@@ -45,7 +61,7 @@ beforeEach(function () use ($holds, $fakeHolds): void {
 });
 
 it('factory make casts the role attribute to the UserRole enum', function (): void {
-    expect(buyerUser()->getAttribute('role'))->toBe(UserRole::Buyer);
+    expect(User::factory()->make(['role' => 'buyer'])->getAttribute('role'))->toBe(UserRole::Buyer);
 });
 
 it('401 without a token', function (): void {
@@ -62,14 +78,19 @@ it('403 for an organizer and a role-less user', function (): void {
 });
 
 it('201 with the exact order shape and no session_id', function (): void {
-    $response = $this->actingAs(buyerUser(), 'sanctum')->postJson('/api/v1/orders', orderPayload())->assertStatus(201);
+    $world = $this->seedPurchasable(2);
+
+    $response = $this->actingAs($world['buyer'], 'sanctum')->postJson('/api/v1/orders', orderPayload([
+        'event_id' => $world['event'],
+        'seat_ids' => $world['seats'],
+    ]))->assertStatus(201);
 
     expect(array_keys((array) $response->json()))->toBe(['id', 'event_id', 'status', 'total_cents', 'currency', 'items'])
         ->and($response->json('status'))->toBe('paid')
-        ->and($response->json('total_cents'))->toBe(10000)
+        ->and($response->json('total_cents'))->toBe(2 * $world['price'])
         ->and($response->json('items'))->toBe([
-            ['event_seat_id' => 1, 'price_cents' => 5000],
-            ['event_seat_id' => 2, 'price_cents' => 5000],
+            ['event_seat_id' => $world['seats'][0], 'price_cents' => $world['price']],
+            ['event_seat_id' => $world['seats'][1], 'price_cents' => $world['price']],
         ])
         ->and($response->getContent())->not->toContain('session_id')
         ->not->toContain('11111111-2222-4333-8444-555555555555');
@@ -86,19 +107,21 @@ it('SEATS_NOT_HELD reports only the missing seats realtime named', function () u
 });
 
 it('asks realtime with the event, seats and session the buyer actually sent', function (): void {
+    $world = $this->seedPurchasable(2);
     $sessionId = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
+    [$first, $second] = $world['seats'];
 
-    $this->actingAs(buyerUser(), 'sanctum')->postJson('/api/v1/orders', orderPayload([
-        'event_id' => 4242,
-        'seat_ids' => [11, 5],
+    $this->actingAs($world['buyer'], 'sanctum')->postJson('/api/v1/orders', orderPayload([
+        'event_id' => $world['event'],
+        'seat_ids' => [$second, $first],
         'session_id' => $sessionId,
     ]))->assertStatus(201);
 
-    Http::assertSent(function ($request) use ($sessionId): bool {
+    Http::assertSent(function ($request) use ($sessionId, $world, $first, $second): bool {
         $url = $request->url();
 
-        expect($url)->toContain('event_id=4242')
-            ->and($url)->toContain('seat_ids=11&seat_ids=5')
+        expect($url)->toContain('event_id='.$world['event'])
+            ->and($url)->toContain('seat_ids='.$second.'&seat_ids='.$first)
             ->and($url)->toContain('session_id='.$sessionId)
             ->and($url)->not->toContain('%5B');
 
@@ -300,8 +323,14 @@ it('422 naming the field the rule rejected', function (array $overrides, string 
 ]);
 
 it('accepts an idempotency key of exactly 128 characters', function (): void {
-    $this->actingAs(buyerUser(), 'sanctum')
-        ->postJson('/api/v1/orders', orderPayload(['idempotency_key' => str_repeat('k', 128)]))
+    $world = $this->seedPurchasable(2);
+
+    $this->actingAs($world['buyer'], 'sanctum')
+        ->postJson('/api/v1/orders', orderPayload([
+            'event_id' => $world['event'],
+            'seat_ids' => $world['seats'],
+            'idempotency_key' => str_repeat('k', 128),
+        ]))
         ->assertStatus(201);
 });
 
@@ -372,12 +401,21 @@ it('rejects a string-keyed seat_ids object so error keys stay positional', funct
 });
 
 it('caps seat_ids at fifty and stays fast past the cap', function (): void {
-    $this->actingAs(buyerUser(), 'sanctum')
-        ->postJson('/api/v1/orders', orderPayload(['seat_ids' => range(100, 149)]))
+    $world = $this->seedPurchasable(50, 0);
+
+    $this->actingAs($world['buyer'], 'sanctum')
+        ->postJson('/api/v1/orders', orderPayload([
+            'event_id' => $world['event'],
+            'seat_ids' => $world['seats'],
+        ]))
         ->assertStatus(201);
 
-    $this->actingAs(buyerUser(), 'sanctum')
-        ->postJson('/api/v1/orders', orderPayload(['seat_ids' => range(100, 150)]))
+    $this->actingAs($world['buyer'], 'sanctum')
+        ->postJson('/api/v1/orders', orderPayload([
+            'event_id' => $world['event'],
+            'seat_ids' => range(100, 150),
+            'idempotency_key' => 'over-the-cap',
+        ]))
         ->assertStatus(422)
         ->assertJsonStructure(['error' => ['details' => ['seat_ids']]]);
 });
