@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use App\Domain\Order\Contracts\PaymentGatewayInterface;
+use App\Domain\Order\DTO\PaymentResult;
 use App\Domain\User\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -15,6 +17,14 @@ beforeEach(function () use ($driftHolds): void {
 
     Http::preventStrayRequests();
     Http::fake(fn (): mixed => Http::response($driftHolds->body, 200));
+
+    app()->instance(PaymentGatewayInterface::class, new class implements PaymentGatewayInterface
+    {
+        public function charge(int $amountCents, string $currency): PaymentResult
+        {
+            return PaymentResult::approved($amountCents, $currency);
+        }
+    });
 });
 
 function driftSpec(): array
@@ -84,9 +94,11 @@ it('documents exactly the keys GET /me really returns', function (): void {
 });
 
 it('documents exactly the keys POST /orders really returns', function (): void {
-    $body = $this->actingAs(driftBuyer(), 'sanctum')->postJson('/api/v1/orders', [
-        'event_id' => 1,
-        'seat_ids' => [1, 2],
+    $world = $this->seedPurchasable(2);
+
+    $body = $this->actingAs($world['buyer'], 'sanctum')->postJson('/api/v1/orders', [
+        'event_id' => $world['event'],
+        'seat_ids' => $world['seats'],
         'session_id' => '1f3a2b4c-5d6e-4a7b-8c90-1e2f3a4b5c6d',
         'idempotency_key' => 'drift-key',
     ])->assertCreated()->json();
@@ -121,7 +133,7 @@ it('documents the real SEATS_NOT_HELD details payload', function () use ($driftH
         'event_id' => 1,
         'seat_ids' => [1, 3, 7],
         'session_id' => '1f3a2b4c-5d6e-4a7b-8c90-1e2f3a4b5c6d',
-        'idempotency_key' => 'drift-key',
+        'idempotency_key' => 'drift-key-422',
     ])->assertStatus(422)->json();
 
     $documented = collect(driftResolve(data_get(driftSpec(), 'paths./api/v1/orders.post.responses.422.content.application/json.schema'))['anyOf'] ?? [])

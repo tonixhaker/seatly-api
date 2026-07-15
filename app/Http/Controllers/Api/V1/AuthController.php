@@ -12,6 +12,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\LoginRequest;
 use App\Http\Requests\RegisterRequest;
 use App\Http\Resources\UserResource;
+use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -22,6 +23,8 @@ final class AuthController extends Controller
 
     /**
      * Register a new buyer or organizer account.
+     *
+     * @throws ThrottleRequestsException
      */
     public function register(RegisterRequest $request): JsonResponse
     {
@@ -40,6 +43,8 @@ final class AuthController extends Controller
 
     /**
      * Exchange credentials for a bearer token.
+     *
+     * @throws ThrottleRequestsException
      */
     public function login(LoginRequest $request): JsonResponse
     {

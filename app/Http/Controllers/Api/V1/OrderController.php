@@ -4,16 +4,21 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Domain\Order\Contracts\HoldsValidatorInterface;
+use App\Domain\Order\DTO\PlaceOrderData;
 use App\Domain\Order\Enums\OrderStatus;
+use App\Domain\Order\Exceptions\DuplicateIdempotencyKeyException;
+use App\Domain\Order\Exceptions\HoldsValidationUnavailableException;
+use App\Domain\Order\Exceptions\MixedCurrencyOrderException;
 use App\Domain\Order\Exceptions\PaymentDeclinedException;
 use App\Domain\Order\Exceptions\SeatsNotHeldException;
+use App\Domain\Order\Services\PlaceOrderService;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\PlaceOrderRequest;
 use App\Http\Resources\OrderResource;
 use App\Http\Resources\TicketResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use RuntimeException;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -26,7 +31,7 @@ final class OrderController extends Controller
 {
     private const ORDER_ID = '3f1b8c42-5d6e-4a7b-9c10-2e4f6a8b0d13';
 
-    public function __construct(private readonly HoldsValidatorInterface $holds) {}
+    public function __construct(private readonly PlaceOrderService $orders) {}
 
     /**
      * Place an order for the seats this session holds.
@@ -34,46 +39,35 @@ final class OrderController extends Controller
      * @throws AccessDeniedHttpException
      * @throws SeatsNotHeldException
      * @throws PaymentDeclinedException
+     * @throws DuplicateIdempotencyKeyException
+     * @throws MixedCurrencyOrderException
+     * @throws HoldsValidationUnavailableException
      */
     public function store(PlaceOrderRequest $request): JsonResponse
     {
-        $seatIds = array_values(array_map(
-            static fn (mixed $seatId): int => is_numeric($seatId) ? (int) $seatId : 0,
-            (array) $request->validated('seat_ids'),
+        $placed = $this->orders->place(new PlaceOrderData(
+            self::buyerId($request),
+            $request->integer('event_id'),
+            array_values(array_map(
+                static fn (mixed $seatId): int => is_numeric($seatId) ? (int) $seatId : 0,
+                (array) $request->validated('seat_ids'),
+            )),
+            $request->string('session_id')->toString(),
+            $request->string('idempotency_key')->toString(),
         ));
 
-        $missing = $this->holds->missingSeats(
-            $request->integer('event_id'),
-            $seatIds,
-            $request->string('session_id')->toString(),
-        );
-
-        if ($missing !== []) {
-            throw new SeatsNotHeldException(
-                'The session no longer holds every requested seat.',
-                ['seats' => $missing],
-            );
+        if ($placed->replayed) {
+            return (new OrderResource($placed->order))->response()->setStatusCode(200);
         }
 
-        $items = [];
-        $totalCents = 0;
+        return (new OrderResource($placed->order))->response()->setStatusCode(201);
+    }
 
-        foreach ($seatIds as $seatId) {
-            $priceCents = $seatId <= 6 ? 5000 : 3500;
-            $items[] = (object) ['event_seat_id' => $seatId, 'price_cents' => $priceCents];
-            $totalCents += $priceCents;
-        }
+    private static function buyerId(PlaceOrderRequest $request): int
+    {
+        $id = $request->user()?->getAuthIdentifier();
 
-        $order = (object) [
-            'id' => self::ORDER_ID,
-            'event_id' => $request->integer('event_id'),
-            'status' => OrderStatus::Paid,
-            'total_cents' => $totalCents,
-            'currency' => 'EUR',
-            'items' => $items,
-        ];
-
-        return (new OrderResource($order))->response()->setStatusCode(201);
+        return is_numeric($id) ? (int) $id : throw new RuntimeException('The authenticated buyer has no numeric identifier.');
     }
 
     /**
