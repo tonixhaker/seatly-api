@@ -9,8 +9,10 @@ use App\Domain\User\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Log\Events\MessageLogged;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Tests\TestCase;
 
 uses(RefreshDatabase::class);
 
@@ -44,6 +46,13 @@ $holds = new stdClass;
 $fakeHolds = static function (mixed $body, int $status = 200) use ($holds): void {
     $holds->body = $body;
     $holds->status = $status;
+};
+
+$place = static function (TestCase $case, array $world, array $overrides = []) {
+    return $case->actingAs($world['buyer'], 'sanctum')->postJson('/api/v1/orders', orderPayload(array_merge([
+        'event_id' => $world['event'],
+        'seat_ids' => $world['seats'],
+    ], $overrides)));
 };
 
 beforeEach(function () use ($holds, $fakeHolds, $approveEveryCharge): void {
@@ -232,28 +241,158 @@ it('validation failures', function (array $overrides, string $field): void {
     'duplicate seat ids' => [['seat_ids' => [1, 1]], 'seat_ids.1'],
 ]);
 
-it('ownership is 404 never 403', function (): void {
-    $own = $this->actingAs(buyerUser(), 'sanctum')->getJson('/api/v1/orders/3f1b8c42-5d6e-4a7b-9c10-2e4f6a8b0d13');
-    $own->assertStatus(200);
+it('reads the buyer own order back with every item and the correct total', function () use ($place): void {
+    $world = $this->seedPurchasable(2);
 
-    $foreign = $this->actingAs(buyerUser(), 'sanctum')->getJson('/api/v1/orders/7c2d9e50-1a3b-4c5d-8e9f-0b1c2d3e4f56');
-    $foreign->assertStatus(404)->assertJsonPath('error.code', 'NOT_FOUND');
-    expect($foreign->getStatusCode())->not->toBe(403);
+    $created = $place($this, $world, ['idempotency_key' => 'read-back'])->assertStatus(201);
+    $orderId = (string) $created->json('id');
 
-    $this->actingAs(buyerUser(), 'sanctum')->getJson('/api/v1/orders/abc')->assertStatus(404);
+    $own = $this->actingAs($world['buyer'], 'sanctum')->getJson('/api/v1/orders/'.$orderId)->assertStatus(200);
+
+    expect($own->json('id'))->toBe($orderId)
+        ->and($own->json('event_id'))->toBe($world['event'])
+        ->and($own->json('status'))->toBe('paid')
+        ->and($own->json('currency'))->toBe('EUR')
+        ->and($own->json('total_cents'))->toBe(2 * $world['price'])
+        ->and($own->json('items'))->toBe([
+            ['event_seat_id' => $world['seats'][0], 'price_cents' => $world['price']],
+            ['event_seat_id' => $world['seats'][1], 'price_cents' => $world['price']],
+        ])
+        ->and($own->getContent())->toBe($created->getContent());
 });
 
-it('tickets is a bare array with both statuses', function (): void {
-    $response = $this->actingAs(buyerUser(), 'sanctum')->getJson('/api/v1/my/tickets')->assertStatus(200);
+it('ownership is 404 never 403, and the foreign 404 is byte-identical to the unknown one', function () use ($place): void {
+    $world = $this->seedPurchasable(2);
+
+    $orderId = (string) $place($this, $world, ['idempotency_key' => 'hidden-order'])->assertStatus(201)->json('id');
+
+    $stranger = User::factory()->create(['role' => 'buyer']);
+    $this->app['auth']->forgetGuards();
+
+    $foreign = $this->actingAs($stranger, 'sanctum')->getJson('/api/v1/orders/'.$orderId)->assertStatus(404);
+    $unknown = $this->actingAs($stranger, 'sanctum')
+        ->getJson('/api/v1/orders/7c2d9e50-1a3b-4c5d-8e9f-0b1c2d3e4f56')->assertStatus(404);
+
+    expect($foreign->getContent())->toBe($unknown->getContent())
+        ->and($foreign->json('error.code'))->toBe('NOT_FOUND')
+        ->and($foreign->getContent())->not->toContain($orderId)
+        ->and($foreign->getStatusCode())->not->toBe(403);
+
+    $this->app['auth']->forgetGuards();
+
+    $forbidden = $this->actingAs(User::factory()->make(['role' => 'organizer']), 'sanctum')
+        ->getJson('/api/v1/orders/'.$orderId)->assertStatus(403);
+
+    expect($forbidden->json('error.code'))->toBe('FORBIDDEN')
+        ->and($forbidden->getStatusCode())->not->toBe($foreign->getStatusCode());
+
+    $this->actingAs($world['buyer'], 'sanctum')->getJson('/api/v1/orders/abc')->assertStatus(404);
+});
+
+it('tickets is a bare array carrying both statuses and the frozen timestamp shape', function () use ($place): void {
+    $world = $this->seedPurchasable(2);
+
+    $orderId = (string) $place($this, $world, ['idempotency_key' => 'ticket-shape'])->assertStatus(201)->json('id');
+
+    DB::table('tickets')
+        ->where('event_seat_id', $world['seats'][1])
+        ->update(['status' => 'checked_in', 'checked_in_at' => '2026-10-01 18:42:07']);
+
+    $response = $this->actingAs($world['buyer'], 'sanctum')->getJson('/api/v1/my/tickets')->assertStatus(200);
 
     expect($response->json('data'))->toBeNull()
         ->and($response->json())->toHaveCount(2)
         ->and(array_keys((array) $response->json('0')))->toBe(['id', 'order_id', 'event_seat_id', 'qr_code', 'status', 'checked_in_at'])
+        ->and($response->json('0.order_id'))->toBe($orderId)
+        ->and($response->json('0.event_seat_id'))->toBe($world['seats'][0])
         ->and($response->json('0.status'))->toBe('issued')
         ->and($response->json('0.checked_in_at'))->toBeNull()
+        ->and($response->json('1.event_seat_id'))->toBe($world['seats'][1])
         ->and($response->json('1.status'))->toBe('checked_in')
         ->and($response->json('1.checked_in_at'))->toBe('2026-10-01T18:42:07Z')
         ->and($response->getContent())->not->toContain('session_id');
+});
+
+it('answers an empty array for a buyer who has bought nothing', function (): void {
+    $response = $this->actingAs(buyerUser(), 'sanctum')->getJson('/api/v1/my/tickets')->assertStatus(200);
+
+    expect($response->json())->toBe([])
+        ->and($response->getContent())->toBe('[]');
+});
+
+it('returns exactly the caller tickets and never another buyer qr code', function () use ($place): void {
+    $mine = $this->seedPurchasable(2);
+    $theirs = $this->seedPurchasable(1);
+
+    $place($this, $mine, ['idempotency_key' => 'mine'])->assertStatus(201);
+    $this->app['auth']->forgetGuards();
+    $place($this, $theirs, ['idempotency_key' => 'theirs'])->assertStatus(201);
+    $this->app['auth']->forgetGuards();
+
+    $foreignTickets = DB::table('tickets')
+        ->join('orders', 'orders.id', '=', 'tickets.order_id')
+        ->where('orders.buyer_id', $theirs['buyer']->id)
+        ->get(['tickets.id', 'tickets.qr_code']);
+
+    expect($foreignTickets)->toHaveCount(1);
+
+    $response = $this->actingAs($mine['buyer'], 'sanctum')->getJson('/api/v1/my/tickets')->assertStatus(200);
+    $body = (string) $response->getContent();
+
+    expect($response->json('*.event_seat_id'))->toBe($mine['seats']);
+
+    foreach ($foreignTickets as $ticket) {
+        expect($body)->not->toContain((string) $ticket->qr_code)
+            ->and($body)->not->toContain((string) $ticket->id);
+    }
+});
+
+it('orders tickets by the clause the query declares, not by whatever the heap returns', function () use ($place): void {
+    $world = $this->seedPurchasable(2);
+
+    $place($this, $world, ['idempotency_key' => 'ordering'])->assertStatus(201);
+
+    DB::connection()->flushQueryLog();
+    DB::connection()->enableQueryLog();
+
+    $this->actingAs($world['buyer'], 'sanctum')->getJson('/api/v1/my/tickets')->assertStatus(200);
+
+    $log = DB::connection()->getQueryLog();
+    DB::connection()->disableQueryLog();
+
+    $reads = array_values(array_filter(
+        array_column($log, 'query'),
+        static fn (string $sql): bool => str_contains($sql, 'from "tickets"'),
+    ));
+
+    expect($reads)->toHaveCount(1)
+        ->and($reads[0])->toContain('order by "tickets"."created_at" asc, "tickets"."event_seat_id" asc, "tickets"."id" asc')
+        ->and($reads[0])->toContain('where "orders"."buyer_id" = ?');
+});
+
+it('reports the status the order actually has, not a hardcoded paid', function (): void {
+    $this->instance(PaymentGatewayInterface::class, new class implements PaymentGatewayInterface
+    {
+        public function charge(int $amountCents, string $currency): PaymentResult
+        {
+            return PaymentResult::declined($amountCents, $currency);
+        }
+    });
+
+    $world = $this->seedPurchasable(1);
+
+    $this->actingAs($world['buyer'], 'sanctum')->postJson('/api/v1/orders', orderPayload([
+        'event_id' => $world['event'],
+        'seat_ids' => $world['seats'],
+        'idempotency_key' => 'declined-order',
+    ]))->assertStatus(402);
+
+    $orderId = (string) DB::table('orders')->where('buyer_id', $world['buyer']->id)->value('id');
+
+    $response = $this->actingAs($world['buyer'], 'sanctum')->getJson('/api/v1/orders/'.$orderId)->assertStatus(200);
+
+    expect($response->json('status'))->toBe('payment_failed')
+        ->and($this->actingAs($world['buyer'], 'sanctum')->getJson('/api/v1/my/tickets')->json())->toBe([]);
 });
 
 it('hostile input never 500s', function (mixed $overrides): void {
@@ -272,7 +411,7 @@ it('hostile input never 500s', function (mixed $overrides): void {
 
 dataset('buyerRoutes', [
     'POST /orders' => ['post', '/api/v1/orders'],
-    'GET /orders/{id}' => ['get', '/api/v1/orders/3f1b8c42-5d6e-4a7b-9c10-2e4f6a8b0d13'],
+    'GET /orders/{id}' => ['get', '/api/v1/orders/7c2d9e50-1a3b-4c5d-8e9f-0b1c2d3e4f56'],
     'GET /my/tickets' => ['get', '/api/v1/my/tickets'],
 ]);
 
@@ -339,27 +478,45 @@ it('405 METHOD_NOT_ALLOWED on a wrong verb against a buyer route', function (): 
         ->assertStatus(405)
         ->assertJsonPath('error.code', 'METHOD_NOT_ALLOWED');
 
-    $this->deleteJson('/api/v1/orders/3f1b8c42-5d6e-4a7b-9c10-2e4f6a8b0d13')
+    $this->deleteJson('/api/v1/orders/7c2d9e50-1a3b-4c5d-8e9f-0b1c2d3e4f56')
         ->assertStatus(405)
         ->assertJsonPath('error.code', 'METHOD_NOT_ALLOWED');
 });
 
-it('404 with no details key for an uppercase variant of the only known order id', function (): void {
-    $response = $this->actingAs(buyerUser(), 'sanctum')
-        ->getJson('/api/v1/orders/3F1B8C42-5D6E-4A7B-9C10-2E4F6A8B0D13')
-        ->assertStatus(404)
-        ->assertJsonPath('error.code', 'NOT_FOUND');
+it('404 with no details key for an unknown order id in either case', function (): void {
+    foreach (['7c2d9e50-1a3b-4c5d-8e9f-0b1c2d3e4f56', '7C2D9E50-1A3B-4C5D-8E9F-0B1C2D3E4F56'] as $unknown) {
+        $response = $this->actingAs(buyerUser(), 'sanctum')
+            ->getJson('/api/v1/orders/'.$unknown)
+            ->assertStatus(404)
+            ->assertJsonPath('error.code', 'NOT_FOUND');
 
-    expect(array_keys((array) $response->json('error')))->toBe(['code', 'message']);
+        expect(array_keys((array) $response->json('error')))->toBe(['code', 'message']);
+    }
 });
 
-it('never echoes the session id on any of the three routes', function (): void {
+it('resolves the buyer own order through an uppercase uuid, because uuids are case-insensitive', function () use ($place): void {
+    $world = $this->seedPurchasable(2);
+
+    $orderId = (string) $place($this, $world, ['idempotency_key' => 'uppercase'])->assertStatus(201)->json('id');
+
+    $lower = $this->actingAs($world['buyer'], 'sanctum')->getJson('/api/v1/orders/'.$orderId)->assertStatus(200);
+    $upper = $this->actingAs($world['buyer'], 'sanctum')->getJson('/api/v1/orders/'.strtoupper($orderId))->assertStatus(200);
+
+    expect($upper->getContent())->toBe($lower->getContent());
+});
+
+it('never echoes the session id on any of the three routes', function () use ($place): void {
     $sessionId = '11111111-2222-4333-8444-555555555555';
 
+    $world = $this->seedPurchasable(2);
+
+    $created = $place($this, $world, ['session_id' => $sessionId, 'idempotency_key' => 'session-echo'])->assertStatus(201);
+    $orderId = (string) $created->json('id');
+
     $responses = [
-        $this->actingAs(buyerUser(), 'sanctum')->postJson('/api/v1/orders', orderPayload(['session_id' => $sessionId])),
-        $this->actingAs(buyerUser(), 'sanctum')->getJson('/api/v1/orders/3f1b8c42-5d6e-4a7b-9c10-2e4f6a8b0d13'),
-        $this->actingAs(buyerUser(), 'sanctum')->getJson('/api/v1/my/tickets'),
+        $created,
+        $this->actingAs($world['buyer'], 'sanctum')->getJson('/api/v1/orders/'.$orderId),
+        $this->actingAs($world['buyer'], 'sanctum')->getJson('/api/v1/my/tickets'),
     ];
 
     foreach ($responses as $response) {
@@ -367,14 +524,25 @@ it('never echoes the session id on any of the three routes', function (): void {
     }
 });
 
-it('issues a unique twelve character qr code per ticket', function (): void {
-    $codes = (array) $this->actingAs(buyerUser(), 'sanctum')->getJson('/api/v1/my/tickets')->json('*.qr_code');
+it('issues a unique twelve character qr code per ticket, and never the milestone-01 fixture', function () use ($place): void {
+    $world = $this->seedPurchasable(2);
+
+    $place($this, $world, ['idempotency_key' => 'qr-codes'])->assertStatus(201);
+
+    $response = $this->actingAs($world['buyer'], 'sanctum')->getJson('/api/v1/my/tickets')->assertStatus(200);
+    $codes = (array) $response->json('*.qr_code');
 
     expect($codes)->toHaveCount(2)
-        ->and(array_unique($codes))->toHaveCount(count($codes));
+        ->and(array_unique($codes))->toHaveCount(count($codes))
+        ->and($response->getContent())->not->toContain('A1B2C3D4E5F6')
+        ->and($response->getContent())->not->toContain('G7H8J9K0L1M2');
+
+    $stored = DB::table('tickets')->orderBy('event_seat_id')->pluck('qr_code')->all();
+
+    expect($codes)->toBe($stored);
 
     foreach ($codes as $code) {
-        expect($code)->toBeString()->toHaveLength(12);
+        expect($code)->toBeString()->toMatch('/^[0-9A-F]{12}$/');
     }
 });
 
@@ -418,4 +586,51 @@ it('caps seat_ids at fifty and stays fast past the cap', function (): void {
         ]))
         ->assertStatus(422)
         ->assertJsonStructure(['error' => ['details' => ['seat_ids']]]);
+});
+
+it('reads the items back in the order the seats were bought, not sorted by seat id', function () use ($place): void {
+    $world = $this->seedPurchasable(3);
+    [$first, $second, $third] = $world['seats'];
+    $bought = [$third, $first, $second];
+
+    $created = $place($this, $world, ['seat_ids' => $bought, 'idempotency_key' => 'shuffled-items'])->assertStatus(201);
+    $orderId = (string) $created->json('id');
+
+    $own = $this->actingAs($world['buyer'], 'sanctum')->getJson('/api/v1/orders/'.$orderId)->assertStatus(200);
+
+    expect($own->json('items.*.event_seat_id'))->toBe($bought)
+        ->and($own->json('items.*.event_seat_id'))->not->toBe([$first, $second, $third])
+        ->and($own->json('total_cents'))->toBe(3 * $world['price'])
+        ->and($own->getContent())->toBe($created->getContent());
+});
+
+it('lists the tickets of every order the buyer has, oldest purchase first', function () use ($place): void {
+    $world = $this->seedPurchasable(2, 2);
+
+    $later = (string) $place($this, $world, ['idempotency_key' => 'later-purchase'])->assertStatus(201)->json('id');
+    $earlier = (string) $place($this, $world, ['seat_ids' => $world['spare'], 'idempotency_key' => 'earlier-purchase'])->assertStatus(201)->json('id');
+
+    DB::table('tickets')->where('order_id', $later)->update(['created_at' => '2026-02-02 09:00:00']);
+    DB::table('tickets')->where('order_id', $earlier)->update(['created_at' => '2026-01-01 09:00:00']);
+
+    $response = $this->actingAs($world['buyer'], 'sanctum')->getJson('/api/v1/my/tickets')->assertStatus(200);
+
+    expect($response->json())->toHaveCount(4)
+        ->and($response->json('*.event_seat_id'))->toBe([...$world['spare'], ...$world['seats']])
+        ->and($response->json('*.order_id'))->toBe([$earlier, $earlier, $later, $later]);
+});
+
+it('formats every checked-in timestamp from its own row, never one frozen value', function () use ($place): void {
+    $world = $this->seedPurchasable(2);
+
+    $place($this, $world, ['idempotency_key' => 'two-check-ins'])->assertStatus(201);
+
+    DB::table('tickets')->where('event_seat_id', $world['seats'][0])
+        ->update(['status' => 'checked_in', 'checked_in_at' => '2026-03-04 05:06:07']);
+    DB::table('tickets')->where('event_seat_id', $world['seats'][1])
+        ->update(['status' => 'checked_in', 'checked_in_at' => '2027-11-30 23:59:58']);
+
+    $response = $this->actingAs($world['buyer'], 'sanctum')->getJson('/api/v1/my/tickets')->assertStatus(200);
+
+    expect($response->json('*.checked_in_at'))->toBe(['2026-03-04T05:06:07Z', '2027-11-30T23:59:58Z']);
 });

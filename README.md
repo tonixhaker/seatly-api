@@ -179,10 +179,10 @@ thing with `DB_PORT=1`, since the runner does have the driver.
 
 ## Status
 
-Work in progress. Auth, the catalog and organizer draft/publish run against PostgreSQL.
-Orders, tickets and check-in still answer from fixtures — the shapes the contract
-describes, backed by no database — and milestone 05 replaces them. The image builds and
-runs.
+Work in progress. Auth, the catalog, organizer draft/publish and the whole order flow —
+placing an order, reading one back and listing your tickets — run against PostgreSQL.
+Check-in and the organizer event stats still answer from fixtures: the shapes the contract
+describes, backed by no database. The image builds and runs.
 
 ## License
 

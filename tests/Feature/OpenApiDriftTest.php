@@ -107,9 +107,19 @@ it('documents exactly the keys POST /orders really returns', function (): void {
 });
 
 it('documents exactly the keys GET /my/tickets really returns', function (): void {
-    $body = $this->actingAs(driftBuyer(), 'sanctum')->getJson('/api/v1/my/tickets')->assertOk()->json();
+    $world = $this->seedPurchasable(2);
 
-    expect(driftActualKeys($body))->toEqualCanonicalizing(driftDocumentedKeys('get', '/api/v1/my/tickets', '200'));
+    $this->actingAs($world['buyer'], 'sanctum')->postJson('/api/v1/orders', [
+        'event_id' => $world['event'],
+        'seat_ids' => $world['seats'],
+        'session_id' => '1f3a2b4c-5d6e-4a7b-8c90-1e2f3a4b5c6d',
+        'idempotency_key' => 'drift-key-tickets',
+    ])->assertCreated();
+
+    $body = $this->actingAs($world['buyer'], 'sanctum')->getJson('/api/v1/my/tickets')->assertOk()->json();
+
+    expect($body)->toHaveCount(2)
+        ->and(driftActualKeys($body))->toEqualCanonicalizing(driftDocumentedKeys('get', '/api/v1/my/tickets', '200'));
 });
 
 it('documents exactly the keys GET /organizer/events/{id}/stats really returns', function (): void {
