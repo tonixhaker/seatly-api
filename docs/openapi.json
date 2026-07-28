@@ -2555,6 +2555,45 @@
                             "null"
                         ],
                         "format": "date-time"
+                    },
+                    "event": {
+                        "type": "object",
+                        "properties": {
+                            "id": {
+                                "type": "integer"
+                            },
+                            "title": {
+                                "type": "string"
+                            },
+                            "starts_at": {
+                                "type": "string",
+                                "format": "date-time"
+                            }
+                        },
+                        "required": [
+                            "id",
+                            "title",
+                            "starts_at"
+                        ]
+                    },
+                    "seat": {
+                        "type": "object",
+                        "properties": {
+                            "section": {
+                                "type": "string"
+                            },
+                            "row": {
+                                "type": "integer"
+                            },
+                            "number": {
+                                "type": "integer"
+                            }
+                        },
+                        "required": [
+                            "section",
+                            "row",
+                            "number"
+                        ]
                     }
                 },
                 "required": [
@@ -2563,7 +2602,9 @@
                     "event_seat_id",
                     "qr_code",
                     "status",
-                    "checked_in_at"
+                    "checked_in_at",
+                    "event",
+                    "seat"
                 ],
                 "title": "TicketResource"
             },

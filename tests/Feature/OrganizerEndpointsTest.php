@@ -518,9 +518,11 @@ it('checks a ticket in and returns exactly the ticket shape', function () use ($
         ->postJson('/api/v1/organizer/check-in', ['qr_code' => 'A1B2C3D4E5F6'])
         ->assertStatus(200);
 
-    expect(array_keys((array) $response->json()))->toBe(['id', 'order_id', 'event_seat_id', 'qr_code', 'status', 'checked_in_at'])
+    expect(array_keys((array) $response->json()))->toBe(['id', 'order_id', 'event_seat_id', 'qr_code', 'status', 'checked_in_at', 'event', 'seat'])
         ->and($response->json('data'))->toBeNull()
         ->and($response->json('qr_code'))->toBe('A1B2C3D4E5F6')
+        ->and($response->json('event'))->toBe(['id' => 1, 'title' => 'Autumn Symphony', 'starts_at' => '2026-10-01T19:00:00Z'])
+        ->and($response->json('seat'))->toBe(['section' => 'A', 'row' => 1, 'number' => 1])
         ->and($response->json('status'))->toBe('checked_in')
         ->and($response->json('checked_in_at'))->toBe('2026-10-01T19:05:00Z');
 });

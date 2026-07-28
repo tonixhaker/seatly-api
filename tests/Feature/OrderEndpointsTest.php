@@ -302,7 +302,7 @@ it('tickets is a bare array carrying both statuses and the frozen timestamp shap
 
     expect($response->json('data'))->toBeNull()
         ->and($response->json())->toHaveCount(2)
-        ->and(array_keys((array) $response->json('0')))->toBe(['id', 'order_id', 'event_seat_id', 'qr_code', 'status', 'checked_in_at'])
+        ->and(array_keys((array) $response->json('0')))->toBe(['id', 'order_id', 'event_seat_id', 'qr_code', 'status', 'checked_in_at', 'event', 'seat'])
         ->and($response->json('0.order_id'))->toBe($orderId)
         ->and($response->json('0.event_seat_id'))->toBe($world['seats'][0])
         ->and($response->json('0.status'))->toBe('issued')
@@ -367,7 +367,36 @@ it('orders tickets by the clause the query declares, not by whatever the heap re
 
     expect($reads)->toHaveCount(1)
         ->and($reads[0])->toContain('order by "tickets"."created_at" asc, "tickets"."event_seat_id" asc, "tickets"."id" asc')
-        ->and($reads[0])->toContain('where "orders"."buyer_id" = ?');
+        ->and($reads[0])->toContain('where "orders"."buyer_id" = ?')
+        ->and($reads[0])->toContain('inner join "event_seats"')
+        ->and($reads[0])->toContain('inner join "events"')
+        ->and(array_filter(
+            array_column($log, 'query'),
+            static fn (string $sql): bool => ! str_contains($sql, 'from "tickets"') && str_contains($sql, '"events"'),
+        ))->toBe([]);
+});
+
+it('returns the event and seat each ticket belongs to, read from the stored rows', function () use ($place): void {
+    $world = $this->seedPurchasable(2);
+
+    $place($this, $world, ['idempotency_key' => 'ticket-details'])->assertStatus(201);
+
+    DB::table('events')->where('id', $world['event'])->update([
+        'title' => 'Literal Gala',
+        'starts_at' => '2027-05-06 09:08:09+02',
+    ]);
+    DB::table('event_seats')->where('id', $world['seats'][1])->update([
+        'section' => 'Balcony',
+        'row' => 7,
+        'number' => 12,
+    ]);
+
+    $response = $this->actingAs($world['buyer'], 'sanctum')->getJson('/api/v1/my/tickets')->assertStatus(200);
+
+    expect($response->json('0.event'))->toBe(['id' => $world['event'], 'title' => 'Literal Gala', 'starts_at' => '2027-05-06T07:08:09Z'])
+        ->and($response->json('1.event'))->toBe(['id' => $world['event'], 'title' => 'Literal Gala', 'starts_at' => '2027-05-06T07:08:09Z'])
+        ->and($response->json('0.seat'))->toBe(['section' => 'A', 'row' => 1, 'number' => 1])
+        ->and($response->json('1.seat'))->toBe(['section' => 'Balcony', 'row' => 7, 'number' => 12]);
 });
 
 it('reports the status the order actually has, not a hardcoded paid', function (): void {

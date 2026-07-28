@@ -13,5 +13,11 @@ final readonly class TicketData
         public string $qr_code,
         public string $status,
         public ?string $checked_in_at,
+        public int $event_id,
+        public string $event_title,
+        public string $event_starts_at,
+        public string $seat_section,
+        public int $seat_row,
+        public int $seat_number,
     ) {}
 }
