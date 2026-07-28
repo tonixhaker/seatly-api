@@ -61,6 +61,8 @@ final readonly class EloquentOrderRepository implements OrderRepositoryInterface
     {
         return array_values(DB::table('tickets')
             ->join('orders', 'orders.id', '=', 'tickets.order_id')
+            ->join('event_seats', 'event_seats.id', '=', 'tickets.event_seat_id')
+            ->join('events', 'events.id', '=', 'event_seats.event_id')
             ->where('orders.buyer_id', $buyerId)
             ->orderBy('tickets.created_at')
             ->orderBy('tickets.event_seat_id')
@@ -72,6 +74,12 @@ final readonly class EloquentOrderRepository implements OrderRepositoryInterface
                 'tickets.qr_code',
                 'tickets.status',
                 'tickets.checked_in_at',
+                'event_seats.event_id as event_id',
+                'events.title as event_title',
+                'events.starts_at as event_starts_at',
+                'event_seats.section as seat_section',
+                'event_seats.row as seat_row',
+                'event_seats.number as seat_number',
             ])
             ->map(static function (mixed $ticket): TicketData {
                 $row = (array) $ticket;
@@ -83,6 +91,12 @@ final readonly class EloquentOrderRepository implements OrderRepositoryInterface
                     self::text($row['qr_code'] ?? null),
                     self::text($row['status'] ?? null),
                     self::timestamp($row['checked_in_at'] ?? null),
+                    self::number($row['event_id'] ?? null),
+                    self::text($row['event_title'] ?? null),
+                    self::text(self::timestamp($row['event_starts_at'] ?? null)),
+                    self::text($row['seat_section'] ?? null),
+                    self::number($row['seat_row'] ?? null),
+                    self::number($row['seat_number'] ?? null),
                 );
             })
             ->all());

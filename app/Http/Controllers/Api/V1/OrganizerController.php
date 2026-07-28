@@ -26,7 +26,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 /**
  * @phpstan-type VenueFixture object{id: int, name: string, address: string, city: string}
  * @phpstan-type EventFixture object{id: int, organizer_id: int, title: string, description: string, starts_at: string, status: string, venue: VenueFixture}
- * @phpstan-type TicketFixture object{id: string, order_id: string, event_id: int, event_seat_id: int, qr_code: string, status: string, checked_in_at: string|null}
+ * @phpstan-type TicketFixture object{id: string, order_id: string, event_id: int, event_seat_id: int, qr_code: string, status: string, checked_in_at: string|null, seat_section: string, seat_row: int, seat_number: int}
  */
 final class OrganizerController extends Controller
 {
@@ -137,6 +137,8 @@ final class OrganizerController extends Controller
             );
         }
 
+        $event = self::event($ticket->event_id);
+
         return new TicketResource((object) [
             'id' => $ticket->id,
             'order_id' => $ticket->order_id,
@@ -144,6 +146,12 @@ final class OrganizerController extends Controller
             'qr_code' => $ticket->qr_code,
             'status' => 'checked_in',
             'checked_in_at' => self::CHECKED_IN_AT,
+            'event_id' => $event->id,
+            'event_title' => $event->title,
+            'event_starts_at' => $event->starts_at,
+            'seat_section' => $ticket->seat_section,
+            'seat_row' => $ticket->seat_row,
+            'seat_number' => $ticket->seat_number,
         ]);
     }
 
@@ -231,9 +239,9 @@ final class OrganizerController extends Controller
     private static function ticketFixtures(): array
     {
         return [
-            (object) ['id' => 'a1d4e7f0-2b58-4c91-8d3e-6f07a9b2c4d5', 'order_id' => '3f1b8c42-5d6e-4a7b-9c10-2e4f6a8b0d13', 'event_id' => 1, 'event_seat_id' => 1, 'qr_code' => 'A1B2C3D4E5F6', 'status' => 'issued', 'checked_in_at' => null],
-            (object) ['id' => 'b2e5f801-3c69-4da2-9e4f-7008bac3d5e6', 'order_id' => '3f1b8c42-5d6e-4a7b-9c10-2e4f6a8b0d13', 'event_id' => 1, 'event_seat_id' => 2, 'qr_code' => 'G7H8J9K0L1M2', 'status' => 'checked_in', 'checked_in_at' => '2026-10-01T18:42:07Z'],
-            (object) ['id' => 'c3f6a912-4d7a-4eb3-af50-8119cbd4e6f7', 'order_id' => '5c2e9a71-8b34-4f6d-9012-3a5b7c9d1e2f', 'event_id' => 2, 'event_seat_id' => 4, 'qr_code' => 'N3P4Q5R6S7T8', 'status' => 'issued', 'checked_in_at' => null],
+            (object) ['id' => 'a1d4e7f0-2b58-4c91-8d3e-6f07a9b2c4d5', 'order_id' => '3f1b8c42-5d6e-4a7b-9c10-2e4f6a8b0d13', 'event_id' => 1, 'event_seat_id' => 1, 'qr_code' => 'A1B2C3D4E5F6', 'status' => 'issued', 'checked_in_at' => null, 'seat_section' => 'A', 'seat_row' => 1, 'seat_number' => 1],
+            (object) ['id' => 'b2e5f801-3c69-4da2-9e4f-7008bac3d5e6', 'order_id' => '3f1b8c42-5d6e-4a7b-9c10-2e4f6a8b0d13', 'event_id' => 1, 'event_seat_id' => 2, 'qr_code' => 'G7H8J9K0L1M2', 'status' => 'checked_in', 'checked_in_at' => '2026-10-01T18:42:07Z', 'seat_section' => 'A', 'seat_row' => 1, 'seat_number' => 2],
+            (object) ['id' => 'c3f6a912-4d7a-4eb3-af50-8119cbd4e6f7', 'order_id' => '5c2e9a71-8b34-4f6d-9012-3a5b7c9d1e2f', 'event_id' => 2, 'event_seat_id' => 4, 'qr_code' => 'N3P4Q5R6S7T8', 'status' => 'issued', 'checked_in_at' => null, 'seat_section' => 'B', 'seat_row' => 2, 'seat_number' => 4],
         ];
     }
 }

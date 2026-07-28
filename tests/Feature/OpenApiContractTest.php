@@ -144,3 +144,25 @@ it('gives every operation a non-empty summary', function (): void {
         expect(data_get(openApiOperation($method, $path), 'summary'))->toBeString()->not->toBe('', $method.' '.$path);
     }
 });
+
+it('documents the event and seat nested in every ticket', function (): void {
+    expect(openApiValue('components.schemas.TicketResource.properties.event'))->toBe([
+        'type' => 'object',
+        'properties' => [
+            'id' => ['type' => 'integer'],
+            'title' => ['type' => 'string'],
+            'starts_at' => ['type' => 'string', 'format' => 'date-time'],
+        ],
+        'required' => ['id', 'title', 'starts_at'],
+    ])
+        ->and(openApiValue('components.schemas.TicketResource.properties.seat'))->toBe([
+            'type' => 'object',
+            'properties' => [
+                'section' => ['type' => 'string'],
+                'row' => ['type' => 'integer'],
+                'number' => ['type' => 'integer'],
+            ],
+            'required' => ['section', 'row', 'number'],
+        ])
+        ->and(openApiValue('components.schemas.TicketResource.required'))->toContain('event', 'seat');
+});
