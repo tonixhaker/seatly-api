@@ -9,6 +9,7 @@ use App\Domain\Event\Exceptions\InvalidEventTransitionException;
 use App\Domain\Event\Services\EventDraftService;
 use App\Domain\Event\Services\EventPublishService;
 use App\Domain\Ticket\Exceptions\AlreadyCheckedInException;
+use App\Domain\Ticket\Services\CheckInService;
 use App\Domain\Venue\Exceptions\InvalidSeatMapTemplateException;
 use App\Http\Controllers\Controller;
 use App\Http\Policies\EventPolicy;
@@ -26,16 +27,14 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 /**
  * @phpstan-type VenueFixture object{id: int, name: string, address: string, city: string}
  * @phpstan-type EventFixture object{id: int, organizer_id: int, title: string, description: string, starts_at: string, status: string, venue: VenueFixture}
- * @phpstan-type TicketFixture object{id: string, order_id: string, event_id: int, event_seat_id: int, qr_code: string, status: string, checked_in_at: string|null, seat_section: string, seat_row: int, seat_number: int}
  */
 final class OrganizerController extends Controller
 {
-    private const CHECKED_IN_AT = '2026-10-01T19:05:00Z';
-
     public function __construct(
         private readonly EventPolicy $policy,
         private readonly EventDraftService $drafts,
         private readonly EventPublishService $publishing,
+        private readonly CheckInService $checkIns,
     ) {}
 
     /**
@@ -124,35 +123,16 @@ final class OrganizerController extends Controller
      */
     public function checkIn(CheckInRequest $request): TicketResource
     {
-        $ticket = self::ticket($request->string('qr_code')->toString());
+        $ticket = $this->checkIns->checkIn(
+            $request->string('qr_code')->toString(),
+            $this->policy->callerId($request->user()),
+        );
 
-        if ($ticket === null || ! $this->policy->owns($request->user(), self::event($ticket->event_id))) {
+        if ($ticket === null) {
             abort(404);
         }
 
-        if ($ticket->checked_in_at !== null) {
-            throw new AlreadyCheckedInException(
-                'This ticket was already checked in.',
-                ['checked_in_at' => $ticket->checked_in_at],
-            );
-        }
-
-        $event = self::event($ticket->event_id);
-
-        return new TicketResource((object) [
-            'id' => $ticket->id,
-            'order_id' => $ticket->order_id,
-            'event_seat_id' => $ticket->event_seat_id,
-            'qr_code' => $ticket->qr_code,
-            'status' => 'checked_in',
-            'checked_in_at' => self::CHECKED_IN_AT,
-            'event_id' => $event->id,
-            'event_title' => $event->title,
-            'event_starts_at' => $event->starts_at,
-            'seat_section' => $ticket->seat_section,
-            'seat_row' => $ticket->seat_row,
-            'seat_number' => $ticket->seat_number,
-        ]);
+        return new TicketResource($ticket);
     }
 
     private static function draftData(CreateEventRequest|UpdateEventRequest $request): EventDraftData
@@ -180,34 +160,6 @@ final class OrganizerController extends Controller
     }
 
     /**
-     * @return EventFixture
-     */
-    private static function event(int $id): object
-    {
-        foreach (self::eventFixtures() as $event) {
-            if ($event->id === $id) {
-                return $event;
-            }
-        }
-
-        abort(404);
-    }
-
-    /**
-     * @return TicketFixture|null
-     */
-    private static function ticket(string $qrCode): ?object
-    {
-        foreach (self::ticketFixtures() as $ticket) {
-            if ($ticket->qr_code === $qrCode) {
-                return $ticket;
-            }
-        }
-
-        return null;
-    }
-
-    /**
      * @return list<VenueFixture>
      */
     private static function venueFixtures(): array
@@ -230,18 +182,6 @@ final class OrganizerController extends Controller
             (object) ['id' => 2, 'organizer_id' => 20, 'title' => 'Winter Jazz Night', 'description' => 'Three quartets across one long night.', 'starts_at' => '2026-12-12T20:30:00Z', 'status' => 'published', 'venue' => $hall],
             (object) ['id' => 3, 'organizer_id' => 10, 'title' => 'Spring Gala', 'description' => 'Not announced yet.', 'starts_at' => '2027-03-04T18:00:00Z', 'status' => 'draft', 'venue' => $arena],
             (object) ['id' => 4, 'organizer_id' => 10, 'title' => 'Summer Retrospective', 'description' => 'Concluded last season.', 'starts_at' => '2026-06-20T19:30:00Z', 'status' => 'archived', 'venue' => $hall],
-        ];
-    }
-
-    /**
-     * @return list<TicketFixture>
-     */
-    private static function ticketFixtures(): array
-    {
-        return [
-            (object) ['id' => 'a1d4e7f0-2b58-4c91-8d3e-6f07a9b2c4d5', 'order_id' => '3f1b8c42-5d6e-4a7b-9c10-2e4f6a8b0d13', 'event_id' => 1, 'event_seat_id' => 1, 'qr_code' => 'A1B2C3D4E5F6', 'status' => 'issued', 'checked_in_at' => null, 'seat_section' => 'A', 'seat_row' => 1, 'seat_number' => 1],
-            (object) ['id' => 'b2e5f801-3c69-4da2-9e4f-7008bac3d5e6', 'order_id' => '3f1b8c42-5d6e-4a7b-9c10-2e4f6a8b0d13', 'event_id' => 1, 'event_seat_id' => 2, 'qr_code' => 'G7H8J9K0L1M2', 'status' => 'checked_in', 'checked_in_at' => '2026-10-01T18:42:07Z', 'seat_section' => 'A', 'seat_row' => 1, 'seat_number' => 2],
-            (object) ['id' => 'c3f6a912-4d7a-4eb3-af50-8119cbd4e6f7', 'order_id' => '5c2e9a71-8b34-4f6d-9012-3a5b7c9d1e2f', 'event_id' => 2, 'event_seat_id' => 4, 'qr_code' => 'N3P4Q5R6S7T8', 'status' => 'issued', 'checked_in_at' => null, 'seat_section' => 'B', 'seat_row' => 2, 'seat_number' => 4],
         ];
     }
 }

@@ -2016,6 +2016,40 @@
                             }
                         }
                     },
+                    "403": {
+                        "description": "FORBIDDEN",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "type": "object",
+                                            "properties": {
+                                                "code": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "FORBIDDEN"
+                                                    ]
+                                                },
+                                                "message": {
+                                                    "type": "string",
+                                                    "description": "One human-readable sentence, safe to show a user."
+                                                }
+                                            },
+                                            "required": [
+                                                "code",
+                                                "message"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "error"
+                                    ]
+                                }
+                            }
+                        }
+                    },
                     "409": {
                         "description": "ALREADY_CHECKED_IN",
                         "content": {
@@ -2048,40 +2082,6 @@
                                                     "required": [
                                                         "checked_in_at"
                                                     ]
-                                                }
-                                            },
-                                            "required": [
-                                                "code",
-                                                "message"
-                                            ]
-                                        }
-                                    },
-                                    "required": [
-                                        "error"
-                                    ]
-                                }
-                            }
-                        }
-                    },
-                    "403": {
-                        "description": "FORBIDDEN",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "type": "object",
-                                            "properties": {
-                                                "code": {
-                                                    "type": "string",
-                                                    "enum": [
-                                                        "FORBIDDEN"
-                                                    ]
-                                                },
-                                                "message": {
-                                                    "type": "string",
-                                                    "description": "One human-readable sentence, safe to show a user."
                                                 }
                                             },
                                             "required": [

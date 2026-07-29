@@ -9,6 +9,7 @@ use App\Domain\Order\Contracts\HoldsValidatorInterface;
 use App\Domain\Order\Contracts\PaymentGatewayInterface;
 use App\Domain\Order\Repositories\OrderRepositoryInterface;
 use App\Domain\Shared\Contracts\EventPublisherInterface;
+use App\Domain\Ticket\Repositories\TicketRepositoryInterface;
 use App\Domain\User\Repositories\UserRepositoryInterface;
 use App\Domain\Venue\Repositories\VenueRepositoryInterface;
 use App\Infrastructure\Messaging\EnvelopeSchemaValidator;
@@ -17,6 +18,7 @@ use App\Infrastructure\Messaging\RabbitMqEventPublisher;
 use App\Infrastructure\Payments\FakePaymentGateway;
 use App\Infrastructure\Persistence\EloquentEventRepository;
 use App\Infrastructure\Persistence\EloquentOrderRepository;
+use App\Infrastructure\Persistence\EloquentTicketRepository;
 use App\Infrastructure\Persistence\EloquentUserRepository;
 use App\Infrastructure\Persistence\EloquentVenueRepository;
 use App\Infrastructure\Realtime\HttpHoldsValidator;
@@ -38,6 +40,7 @@ final class DomainServiceProvider extends ServiceProvider
         $this->app->bind(VenueRepositoryInterface::class, EloquentVenueRepository::class);
         $this->app->bind(UserRepositoryInterface::class, EloquentUserRepository::class);
         $this->app->bind(OrderRepositoryInterface::class, EloquentOrderRepository::class);
+        $this->app->bind(TicketRepositoryInterface::class, EloquentTicketRepository::class);
 
         $this->app->singleton(EnvelopeSchemaValidator::class, static function (): EnvelopeSchemaValidator {
             return new EnvelopeSchemaValidator(Config::string('messaging.schema_path'));
