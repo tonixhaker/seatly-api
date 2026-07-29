@@ -15,10 +15,8 @@ use App\Domain\Order\Exceptions\DuplicateIdempotencyKeyException;
 use App\Domain\Order\Exceptions\MixedCurrencyOrderException;
 use App\Domain\Order\Exceptions\SeatsNotHeldException;
 use App\Domain\Order\Repositories\OrderRepositoryInterface;
-use App\Domain\Ticket\DTO\TicketData;
 use App\Domain\Ticket\Enums\TicketStatus;
 use Illuminate\Database\QueryException;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Random\Randomizer;
@@ -59,46 +57,14 @@ final readonly class EloquentOrderRepository implements OrderRepositoryInterface
 
     public function ticketsForBuyer(int $buyerId): array
     {
-        return array_values(DB::table('tickets')
+        return array_values(TicketRows::query()
             ->join('orders', 'orders.id', '=', 'tickets.order_id')
-            ->join('event_seats', 'event_seats.id', '=', 'tickets.event_seat_id')
-            ->join('events', 'events.id', '=', 'event_seats.event_id')
             ->where('orders.buyer_id', $buyerId)
             ->orderBy('tickets.created_at')
             ->orderBy('tickets.event_seat_id')
             ->orderBy('tickets.id')
-            ->get([
-                'tickets.id',
-                'tickets.order_id',
-                'tickets.event_seat_id',
-                'tickets.qr_code',
-                'tickets.status',
-                'tickets.checked_in_at',
-                'event_seats.event_id as event_id',
-                'events.title as event_title',
-                'events.starts_at as event_starts_at',
-                'event_seats.section as seat_section',
-                'event_seats.row as seat_row',
-                'event_seats.number as seat_number',
-            ])
-            ->map(static function (mixed $ticket): TicketData {
-                $row = (array) $ticket;
-
-                return new TicketData(
-                    self::text($row['id'] ?? null),
-                    self::text($row['order_id'] ?? null),
-                    self::number($row['event_seat_id'] ?? null),
-                    self::text($row['qr_code'] ?? null),
-                    self::text($row['status'] ?? null),
-                    self::timestamp($row['checked_in_at'] ?? null),
-                    self::number($row['event_id'] ?? null),
-                    self::text($row['event_title'] ?? null),
-                    self::text(self::timestamp($row['event_starts_at'] ?? null)),
-                    self::text($row['seat_section'] ?? null),
-                    self::number($row['seat_row'] ?? null),
-                    self::number($row['seat_number'] ?? null),
-                );
-            })
+            ->get(TicketRows::COLUMNS)
+            ->map(TicketRows::toData(...))
             ->all());
     }
 
@@ -169,8 +135,8 @@ final readonly class EloquentOrderRepository implements OrderRepositoryInterface
         foreach ($rows as $row) {
             $seat = (array) $row;
 
-            if (self::text($seat['status'] ?? null) === SeatStatus::Free->value) {
-                $free[self::number($seat['id'] ?? null)] = $seat;
+            if (StoredColumn::text($seat['status'] ?? null) === SeatStatus::Free->value) {
+                $free[StoredColumn::number($seat['id'] ?? null)] = $seat;
             }
         }
 
@@ -190,8 +156,8 @@ final readonly class EloquentOrderRepository implements OrderRepositoryInterface
         $currencies = [];
 
         foreach ($order->seat_ids as $seatId) {
-            $items[] = new OrderItemData($seatId, self::number($free[$seatId]['price_cents'] ?? null));
-            $currencies[self::text($free[$seatId]['currency'] ?? null)] = true;
+            $items[] = new OrderItemData($seatId, StoredColumn::number($free[$seatId]['price_cents'] ?? null));
+            $currencies[StoredColumn::text($free[$seatId]['currency'] ?? null)] = true;
         }
 
         if (count($currencies) !== 1) {
@@ -294,47 +260,26 @@ final readonly class EloquentOrderRepository implements OrderRepositoryInterface
     private static function hydrate(array $order): OrderData
     {
         $items = DB::table('order_items')
-            ->where('order_id', self::text($order['id'] ?? null))
+            ->where('order_id', StoredColumn::text($order['id'] ?? null))
             ->orderBy('id')
             ->get()
             ->map(static function (mixed $item): OrderItemData {
                 $row = (array) $item;
 
                 return new OrderItemData(
-                    self::number($row['event_seat_id'] ?? null),
-                    self::number($row['price_cents'] ?? null),
+                    StoredColumn::number($row['event_seat_id'] ?? null),
+                    StoredColumn::number($row['price_cents'] ?? null),
                 );
             })
             ->all();
 
         return new OrderData(
-            self::text($order['id'] ?? null),
-            self::number($order['event_id'] ?? null),
-            OrderStatus::from(self::text($order['status'] ?? null)),
-            self::number($order['total_cents'] ?? null),
-            self::text($order['currency'] ?? null),
+            StoredColumn::text($order['id'] ?? null),
+            StoredColumn::number($order['event_id'] ?? null),
+            OrderStatus::from(StoredColumn::text($order['status'] ?? null)),
+            StoredColumn::number($order['total_cents'] ?? null),
+            StoredColumn::text($order['currency'] ?? null),
             array_values($items),
         );
-    }
-
-    private static function number(mixed $value): int
-    {
-        return is_numeric($value) ? (int) $value : throw new RuntimeException('A stored numeric column is not numeric.');
-    }
-
-    private static function text(mixed $value): string
-    {
-        return is_string($value) ? $value : throw new RuntimeException('A stored text column is not a string.');
-    }
-
-    private static function timestamp(mixed $value): ?string
-    {
-        if ($value === null) {
-            return null;
-        }
-
-        return is_string($value)
-            ? Carbon::parse($value, 'UTC')->toIso8601ZuluString()
-            : throw new RuntimeException('A stored timestamp column is not a string.');
     }
 }

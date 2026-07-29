@@ -129,7 +129,10 @@ it('documents exactly the keys GET /organizer/events/{id}/stats really returns',
 });
 
 it('documents exactly the keys POST /organizer/check-in really returns', function (): void {
-    $body = $this->actingAs(driftOrganizer(), 'sanctum')
+    $ids = $this->seedCatalog();
+    $this->insertTicket($ids['published'][0], $ids['sold'][0], 'A1B2C3D4E5F6');
+
+    $body = $this->actingAs(User::findOrFail($ids['organizer']), 'sanctum')
         ->postJson('/api/v1/organizer/check-in', ['qr_code' => 'A1B2C3D4E5F6'])
         ->assertOk()->json();
 
@@ -155,7 +158,15 @@ it('documents the real SEATS_NOT_HELD details payload', function () use ($driftH
 });
 
 it('documents the real ALREADY_CHECKED_IN details payload', function (): void {
-    $body = $this->actingAs(driftOrganizer(), 'sanctum')
+    $ids = $this->seedCatalog();
+    $this->insertTicket($ids['published'][0], $ids['sold'][0], 'G7H8J9K0L1M2');
+    $organizer = User::findOrFail($ids['organizer']);
+
+    $this->actingAs($organizer, 'sanctum')
+        ->postJson('/api/v1/organizer/check-in', ['qr_code' => 'G7H8J9K0L1M2'])
+        ->assertOk();
+
+    $body = $this->actingAs($organizer, 'sanctum')
         ->postJson('/api/v1/organizer/check-in', ['qr_code' => 'G7H8J9K0L1M2'])
         ->assertStatus(409)->json();
 

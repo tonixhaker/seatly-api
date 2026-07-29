@@ -8,6 +8,7 @@ use App\Domain\User\Enums\UserRole;
 use App\Domain\User\Models\User;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 abstract class TestCase extends BaseTestCase
 {
@@ -83,6 +84,37 @@ abstract class TestCase extends BaseTestCase
             'price' => $priceCents,
             'spare' => array_values(array_slice($all, $seats)),
         ];
+    }
+
+    protected function insertTicket(int $eventId, int $eventSeatId, string $qrCode, string $status = 'issued', ?string $checkedInAt = null): string
+    {
+        $orderId = Str::uuid()->toString();
+        $ticketId = Str::uuid()->toString();
+
+        DB::table('orders')->insert([
+            'id' => $orderId,
+            'buyer_id' => User::factory()->create(['role' => UserRole::Buyer])->id,
+            'event_id' => $eventId,
+            'status' => 'paid',
+            'total_cents' => 3500,
+            'currency' => 'EUR',
+            'idempotency_key' => 'ticket-'.$qrCode,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('tickets')->insert([
+            'id' => $ticketId,
+            'order_id' => $orderId,
+            'event_seat_id' => $eventSeatId,
+            'qr_code' => $qrCode,
+            'status' => $status,
+            'checked_in_at' => $checkedInAt,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return $ticketId;
     }
 
     private function insertVenue(string $name, string $address, string $city): int

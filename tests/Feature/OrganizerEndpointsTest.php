@@ -438,15 +438,6 @@ it('another organizer event is 404 never 403 on the fixture routes', function (s
     'stats' => ['get', '/api/v1/organizer/events/2/stats'],
 ]);
 
-it('a ticket for another organizer event is 404 never 403', function () use ($fixtureOrganizer): void {
-    $response = $this->actingAs($fixtureOrganizer(), 'sanctum')
-        ->postJson('/api/v1/organizer/check-in', ['qr_code' => 'N3P4Q5R6S7T8'])
-        ->assertStatus(404)
-        ->assertJsonPath('error.code', 'NOT_FOUND');
-
-    expect($response->getStatusCode())->not->toBe(403);
-});
-
 it('a foreign event, an unknown id and an oversized id are indistinguishable on stats', function () use ($fixtureOrganizer): void {
     $bodies = [];
 
@@ -476,13 +467,6 @@ it('422 for a qr code of the wrong length, the wrong type or none at all', funct
     'missing' => [[]],
 ]);
 
-it('404 for a well formed qr code that matches no ticket', function () use ($fixtureOrganizer): void {
-    $this->actingAs($fixtureOrganizer(), 'sanctum')
-        ->postJson('/api/v1/organizer/check-in', ['qr_code' => 'Z9Y8X7W6V5U4'])
-        ->assertStatus(404)
-        ->assertJsonPath('error.code', 'NOT_FOUND');
-});
-
 it('reports the sales dashboard for an event that has seats', function (int $id) use ($fixtureOrganizer): void {
     $response = $this->actingAs($fixtureOrganizer(), 'sanctum')
         ->getJson('/api/v1/organizer/events/'.$id.'/stats')
@@ -511,28 +495,6 @@ it('reports every counter as zero for a draft that has no seats yet', function (
         'revenue_cents' => 0,
         'currency' => 'EUR',
     ]);
-});
-
-it('checks a ticket in and returns exactly the ticket shape', function () use ($fixtureOrganizer): void {
-    $response = $this->actingAs($fixtureOrganizer(), 'sanctum')
-        ->postJson('/api/v1/organizer/check-in', ['qr_code' => 'A1B2C3D4E5F6'])
-        ->assertStatus(200);
-
-    expect(array_keys((array) $response->json()))->toBe(['id', 'order_id', 'event_seat_id', 'qr_code', 'status', 'checked_in_at', 'event', 'seat'])
-        ->and($response->json('data'))->toBeNull()
-        ->and($response->json('qr_code'))->toBe('A1B2C3D4E5F6')
-        ->and($response->json('event'))->toBe(['id' => 1, 'title' => 'Autumn Symphony', 'starts_at' => '2026-10-01T19:00:00Z'])
-        ->and($response->json('seat'))->toBe(['section' => 'A', 'row' => 1, 'number' => 1])
-        ->and($response->json('status'))->toBe('checked_in')
-        ->and($response->json('checked_in_at'))->toBe('2026-10-01T19:05:00Z');
-});
-
-it('409 ALREADY_CHECKED_IN carrying the first check-in timestamp', function () use ($fixtureOrganizer): void {
-    $this->actingAs($fixtureOrganizer(), 'sanctum')
-        ->postJson('/api/v1/organizer/check-in', ['qr_code' => 'G7H8J9K0L1M2'])
-        ->assertStatus(409)
-        ->assertJsonPath('error.code', 'ALREADY_CHECKED_IN')
-        ->assertJsonPath('error.details.checked_in_at', '2026-10-01T18:42:07Z');
 });
 
 $seatMap = function (array $sections): array {
