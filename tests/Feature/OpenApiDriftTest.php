@@ -68,11 +68,6 @@ function driftBuyer(): User
     return User::factory()->make(['id' => 7, 'role' => 'buyer']);
 }
 
-function driftOrganizer(): User
-{
-    return User::factory()->make(['id' => 10, 'role' => 'organizer']);
-}
-
 it('documents exactly the keys GET /events/{id} really returns', function (): void {
     $ids = $this->seedCatalog();
     $body = $this->getJson('/api/v1/events/'.$ids['published'][0])->assertOk()->json();
@@ -123,7 +118,8 @@ it('documents exactly the keys GET /my/tickets really returns', function (): voi
 });
 
 it('documents exactly the keys GET /organizer/events/{id}/stats really returns', function (): void {
-    $body = $this->actingAs(driftOrganizer(), 'sanctum')->getJson('/api/v1/organizer/events/1/stats')->assertOk()->json();
+    $ids = $this->seedCatalog();
+    $body = $this->actingAs(User::findOrFail($ids['organizer']), 'sanctum')->getJson('/api/v1/organizer/events/'.$ids['published'][0].'/stats')->assertOk()->json();
 
     expect(driftActualKeys($body))->toEqualCanonicalizing(driftDocumentedKeys('get', '/api/v1/organizer/events/{id}/stats', '200'));
 });

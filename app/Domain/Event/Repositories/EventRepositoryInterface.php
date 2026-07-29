@@ -33,5 +33,10 @@ interface EventRepositoryInterface
      */
     public function publishWithSeats(Event $event, array $seats): ?array;
 
+    /**
+     * @return array{seats_total: int, seats_sold: int, revenue_cents: int, currency: string|null}|null
+     */
+    public function statsForOrganizer(int $id, int $organizerId): ?array;
+
     public function persist(Event $event): void;
 }

@@ -15,7 +15,7 @@ use App\Domain\Venue\Exceptions\InvalidSeatMapTemplateException;
 
 final readonly class EventPublishService
 {
-    private const CURRENCY = 'EUR';
+    public const CURRENCY = 'EUR';
 
     public function __construct(
         private EventRepositoryInterface $events,

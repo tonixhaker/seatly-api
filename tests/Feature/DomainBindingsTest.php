@@ -103,6 +103,11 @@ it('changes the service behaviour when the implementation binding is swapped', f
                 return null;
             }
 
+            public function statsForOrganizer(int $id, int $organizerId): ?array
+            {
+                return null;
+            }
+
             public function persist(Event $event): void {}
         };
     });
