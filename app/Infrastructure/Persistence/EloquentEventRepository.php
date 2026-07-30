@@ -11,6 +11,8 @@ use App\Domain\Event\Enums\SeatStatus;
 use App\Domain\Event\Models\Event;
 use App\Domain\Event\Models\EventSeat;
 use App\Domain\Event\Repositories\EventRepositoryInterface;
+use App\Domain\Order\Enums\OrderStatus;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -113,6 +115,37 @@ final class EloquentEventRepository implements EventRepositoryInterface
                 $ids,
             ));
         });
+    }
+
+    public function statsForOrganizer(int $id, int $organizerId): ?array
+    {
+        $event = Event::query()
+            ->where('organizer_id', $organizerId)
+            ->withCount([
+                'seats',
+                'seats as seats_sold' => static fn (Builder $seats): Builder => $seats->where('status', SeatStatus::Sold),
+            ])
+            ->withMax('seats', 'currency')
+            ->find($id);
+
+        if ($event === null) {
+            return null;
+        }
+
+        $revenue = DB::table('order_items')
+            ->join('orders', 'orders.id', '=', 'order_items.order_id')
+            ->where('orders.event_id', $id)
+            ->where('orders.status', OrderStatus::Paid->value)
+            ->sum('order_items.price_cents');
+
+        $currency = $event->getAttribute('seats_max_currency');
+
+        return [
+            'seats_total' => StoredColumn::number($event->getAttribute('seats_count')),
+            'seats_sold' => StoredColumn::number($event->getAttribute('seats_sold')),
+            'revenue_cents' => StoredColumn::number($revenue),
+            'currency' => is_string($currency) ? $currency : null,
+        ];
     }
 
     public function persist(Event $event): void

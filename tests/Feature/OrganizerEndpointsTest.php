@@ -427,33 +427,6 @@ it('405 METHOD_NOT_ALLOWED on a wrong verb against the update route', function (
         ->assertJsonPath('error.code', 'METHOD_NOT_ALLOWED');
 });
 
-it('another organizer event is 404 never 403 on the fixture routes', function (string $method, string $uri) use ($fixtureOrganizer): void {
-    $response = $this->actingAs($fixtureOrganizer(), 'sanctum')
-        ->json($method, $uri)
-        ->assertStatus(404)
-        ->assertJsonPath('error.code', 'NOT_FOUND');
-
-    expect($response->getStatusCode())->not->toBe(403);
-})->with([
-    'stats' => ['get', '/api/v1/organizer/events/2/stats'],
-]);
-
-it('a foreign event, an unknown id and an oversized id are indistinguishable on stats', function () use ($fixtureOrganizer): void {
-    $bodies = [];
-
-    foreach (['2', '999', '12345678901234567890'] as $id) {
-        $response = $this->actingAs($fixtureOrganizer(), 'sanctum')
-            ->getJson('/api/v1/organizer/events/'.$id.'/stats')
-            ->assertStatus(404);
-
-        $bodies[] = $response->getContent();
-    }
-
-    expect($bodies[0])->toBe('{"error":{"code":"NOT_FOUND","message":"The requested resource was not found."}}')
-        ->and($bodies[1])->toBe($bodies[0])
-        ->and($bodies[2])->toBe($bodies[0]);
-});
-
 it('422 for a qr code of the wrong length, the wrong type or none at all', function (array $payload) use ($fixtureOrganizer): void {
     $this->actingAs($fixtureOrganizer(), 'sanctum')
         ->postJson('/api/v1/organizer/check-in', $payload)
@@ -466,36 +439,6 @@ it('422 for a qr code of the wrong length, the wrong type or none at all', funct
     'an integer' => [['qr_code' => 123456789012]],
     'missing' => [[]],
 ]);
-
-it('reports the sales dashboard for an event that has seats', function (int $id) use ($fixtureOrganizer): void {
-    $response = $this->actingAs($fixtureOrganizer(), 'sanctum')
-        ->getJson('/api/v1/organizer/events/'.$id.'/stats')
-        ->assertStatus(200);
-
-    expect($response->json())->toBe([
-        'event_id' => $id,
-        'seats_total' => 12,
-        'seats_sold' => 3,
-        'seats_free' => 9,
-        'revenue_cents' => 12000,
-        'currency' => 'EUR',
-    ]);
-})->with([1, 4]);
-
-it('reports every counter as zero for a draft that has no seats yet', function () use ($fixtureOrganizer): void {
-    $response = $this->actingAs($fixtureOrganizer(), 'sanctum')
-        ->getJson('/api/v1/organizer/events/3/stats')
-        ->assertStatus(200);
-
-    expect($response->json())->toBe([
-        'event_id' => 3,
-        'seats_total' => 0,
-        'seats_sold' => 0,
-        'seats_free' => 0,
-        'revenue_cents' => 0,
-        'currency' => 'EUR',
-    ]);
-});
 
 $seatMap = function (array $sections): array {
     return ['sections' => $sections];

@@ -8,6 +8,7 @@ use App\Domain\Event\Enums\EventStatus;
 use App\Domain\Venue\Models\Venue;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
@@ -34,6 +35,14 @@ class Event extends Model
     public function venue(): BelongsTo
     {
         return $this->belongsTo(Venue::class);
+    }
+
+    /**
+     * @return HasMany<EventSeat, $this>
+     */
+    public function seats(): HasMany
+    {
+        return $this->hasMany(EventSeat::class);
     }
 
     protected function casts(): array

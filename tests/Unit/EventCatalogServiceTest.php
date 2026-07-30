@@ -84,6 +84,11 @@ $fakeRepository = function (?LengthAwarePaginator $page = null, ?Event $found = 
             return null;
         }
 
+        public function statsForOrganizer(int $id, int $organizerId): ?array
+        {
+            return null;
+        }
+
         public function persist(Event $event): void {}
     };
 };

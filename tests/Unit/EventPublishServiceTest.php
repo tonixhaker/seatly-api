@@ -98,6 +98,11 @@ $fakeEvents = function (?Event $owned, ?array $seatIds = [1, 2]): EventRepositor
             return $this->seatIds;
         }
 
+        public function statsForOrganizer(int $id, int $organizerId): ?array
+        {
+            return null;
+        }
+
         public function persist(Event $event): void {}
     };
 };
