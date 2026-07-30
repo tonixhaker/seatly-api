@@ -34,6 +34,9 @@ beforeEach(function (): void {
 });
 
 dataset('organizerRoutes', [
+    'GET /organizer/events' => ['get', '/api/v1/organizer/events'],
+    'GET /organizer/events/{id}' => ['get', '/api/v1/organizer/events/3'],
+    'GET /organizer/venues' => ['get', '/api/v1/organizer/venues'],
     'POST /organizer/events' => ['post', '/api/v1/organizer/events'],
     'PUT /organizer/events/{id}' => ['put', '/api/v1/organizer/events/3'],
     'POST /organizer/events/{id}/publish' => ['post', '/api/v1/organizer/events/3/publish'],

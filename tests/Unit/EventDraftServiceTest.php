@@ -10,6 +10,7 @@ use App\Domain\Event\Exceptions\InvalidEventTransitionException;
 use App\Domain\Event\Models\Event;
 use App\Domain\Event\Repositories\EventRepositoryInterface;
 use App\Domain\Event\Services\EventDraftService;
+use App\Domain\Venue\DTO\VenueData;
 use App\Domain\Venue\Models\Venue;
 use App\Domain\Venue\Repositories\VenueRepositoryInterface;
 use Illuminate\Database\Eloquent\Collection;
@@ -60,6 +61,11 @@ $fakeEvents = function (?Event $owned = null): EventRepositoryInterface {
             return new LengthAwarePaginator([], 0, 15, 1);
         }
 
+        public function paginateOwnedByOrganizer(int $organizerId, EventFilter $filter): LengthAwarePaginator
+        {
+            return new LengthAwarePaginator([], 0, 15, 1);
+        }
+
         public function findPublished(int $id): ?Event
         {
             return null;
@@ -98,18 +104,23 @@ $fakeEvents = function (?Event $owned = null): EventRepositoryInterface {
     };
 };
 
-$fakeVenues = function (?Venue $venue): VenueRepositoryInterface {
-    return new class($venue) implements VenueRepositoryInterface
+$fakeVenues = function (?Venue $venue, ?array $all = null): VenueRepositoryInterface {
+    return new class($venue, $all) implements VenueRepositoryInterface
     {
         public int $calls = 0;
 
-        public function __construct(private readonly ?Venue $venue) {}
+        public function __construct(private readonly ?Venue $venue, private readonly ?array $all) {}
 
         public function findById(int $id): ?Venue
         {
             $this->calls++;
 
             return $this->venue;
+        }
+
+        public function all(): Collection
+        {
+            return new Collection($this->all ?? ($this->venue === null ? [] : [$this->venue]));
         }
     };
 };
@@ -204,4 +215,20 @@ it('applies the update and rebuilds the venue from the repository, not from the 
         ->and($data?->status)->toBe(EventStatus::Draft)
         ->and($data?->venue->id)->toBe(7)
         ->and($data?->venue->name)->toBe('Northgate Hall');
+});
+
+it('lists the venues as VenueData in the order the repository gives them', function () use ($fakeEvents, $fakeVenues, $makeVenue): void {
+    $venues = (new EventDraftService($fakeEvents(), $fakeVenues(null, [$makeVenue(9, 'Riverside Arena'), $makeVenue(4, 'Northgate Hall')])))->venues();
+
+    expect($venues)->toHaveCount(2)
+        ->each->toBeInstanceOf(VenueData::class)
+        ->and(array_is_list($venues))->toBeTrue()
+        ->and(array_map(fn (VenueData $venue): int => $venue->id, $venues))->toBe([9, 4])
+        ->and($venues[1]->name)->toBe('Northgate Hall')
+        ->and($venues[1]->address)->toBe('14 Quay Street')
+        ->and($venues[1]->city)->toBe('Rotterdam');
+});
+
+it('lists no venues when the repository has none', function () use ($fakeEvents, $fakeVenues): void {
+    expect((new EventDraftService($fakeEvents(), $fakeVenues(null, [])))->venues())->toBe([]);
 });

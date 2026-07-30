@@ -27,6 +27,24 @@ final readonly class EventCatalogService
         return $page;
     }
 
+    /**
+     * @return LengthAwarePaginator<int, EventData>
+     */
+    public function listOwnedByOrganizer(int $organizerId, EventFilter $filter): LengthAwarePaginator
+    {
+        $page = $this->events->paginateOwnedByOrganizer($organizerId, $filter);
+        $page->through(fn (Event $event): EventData => EventData::fromModel($event));
+
+        return $page;
+    }
+
+    public function findOwnedByOrganizer(int $id, int $organizerId): ?EventData
+    {
+        $event = $this->events->findOwnedByOrganizer($id, $organizerId);
+
+        return $event === null ? null : EventData::fromModel($event);
+    }
+
     public function findPublished(int $id): ?EventData
     {
         $event = $this->events->findPublished($id);

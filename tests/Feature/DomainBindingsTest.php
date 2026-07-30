@@ -70,6 +70,11 @@ it('changes the service behaviour when the implementation binding is swapped', f
                 return new LengthAwarePaginator([], 0, 15, 1);
             }
 
+            public function paginateOwnedByOrganizer(int $organizerId, EventFilter $filter): LengthAwarePaginator
+            {
+                return new LengthAwarePaginator([], 0, 15, 1);
+            }
+
             public function findPublished(int $id): ?Event
             {
                 $venue = new Venue;

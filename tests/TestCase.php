@@ -117,7 +117,7 @@ abstract class TestCase extends BaseTestCase
         return $ticketId;
     }
 
-    private function insertVenue(string $name, string $address, string $city): int
+    protected function insertVenue(string $name, string $address, string $city): int
     {
         return (int) DB::table('venues')->insertGetId([
             'name' => $name,
@@ -129,7 +129,7 @@ abstract class TestCase extends BaseTestCase
         ]);
     }
 
-    private function insertEvent(int $organizerId, int $venueId, string $title, ?string $description, string $startsAt, string $status): int
+    protected function insertEvent(int $organizerId, int $venueId, string $title, ?string $description, string $startsAt, string $status): int
     {
         return (int) DB::table('events')->insertGetId([
             'organizer_id' => $organizerId,

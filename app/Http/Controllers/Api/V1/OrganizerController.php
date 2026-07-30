@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Event\DTO\EventDraftData;
+use App\Domain\Event\DTO\EventFilter;
 use App\Domain\Event\Exceptions\InvalidEventTransitionException;
+use App\Domain\Event\Services\EventCatalogService;
 use App\Domain\Event\Services\EventDraftService;
 use App\Domain\Event\Services\EventPublishService;
 use App\Domain\Event\Services\EventStatsService;
@@ -16,12 +18,16 @@ use App\Http\Controllers\Controller;
 use App\Http\Policies\EventPolicy;
 use App\Http\Requests\CheckInRequest;
 use App\Http\Requests\CreateEventRequest;
+use App\Http\Requests\IndexEventsRequest;
 use App\Http\Requests\UpdateEventRequest;
 use App\Http\Resources\EventDetailResource;
+use App\Http\Resources\EventResource;
 use App\Http\Resources\EventStatsResource;
 use App\Http\Resources\TicketResource;
+use App\Http\Resources\VenueResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -33,7 +39,52 @@ final class OrganizerController extends Controller
         private readonly EventPublishService $publishing,
         private readonly CheckInService $checkIns,
         private readonly EventStatsService $eventStats,
+        private readonly EventCatalogService $catalog,
     ) {}
+
+    /**
+     * List the caller's events in every status.
+     *
+     * @throws AccessDeniedHttpException
+     */
+    public function index(IndexEventsRequest $request): AnonymousResourceCollection
+    {
+        $page = $this->catalog->listOwnedByOrganizer($this->policy->callerId($request->user()), new EventFilter(
+            starts_from: $request->string('starts_from')->toString() ?: null,
+            starts_until: $request->string('starts_until')->toString() ?: null,
+            page: $request->integer('page') ?: 1,
+            per_page: $request->integer('per_page') ?: 15,
+        ));
+
+        return EventResource::collection($page->withQueryString());
+    }
+
+    /**
+     * Return one of the caller's events in any status, with its venue.
+     *
+     * @throws AccessDeniedHttpException
+     * @throws NotFoundHttpException
+     */
+    public function show(Request $request, int $id): EventDetailResource
+    {
+        $event = $this->catalog->findOwnedByOrganizer($id, $this->policy->callerId($request->user()));
+
+        if ($event === null) {
+            abort(404);
+        }
+
+        return new EventDetailResource($event);
+    }
+
+    /**
+     * List the venues an event can be held at.
+     *
+     * @throws AccessDeniedHttpException
+     */
+    public function venues(): AnonymousResourceCollection
+    {
+        return VenueResource::collection($this->drafts->venues());
+    }
 
     /**
      * Create a draft event.

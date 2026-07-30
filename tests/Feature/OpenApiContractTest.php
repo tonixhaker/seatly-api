@@ -16,11 +16,14 @@ const PROTECTED_ENDPOINTS = [
     ['post', '/api/v1/orders'],
     ['get', '/api/v1/orders/{id}'],
     ['get', '/api/v1/my/tickets'],
+    ['get', '/api/v1/organizer/events'],
     ['post', '/api/v1/organizer/events'],
+    ['get', '/api/v1/organizer/events/{id}'],
     ['put', '/api/v1/organizer/events/{id}'],
     ['post', '/api/v1/organizer/events/{id}/publish'],
     ['get', '/api/v1/organizer/events/{id}/stats'],
     ['post', '/api/v1/organizer/check-in'],
+    ['get', '/api/v1/organizer/venues'],
 ];
 
 function openApiFile(): string
@@ -79,6 +82,25 @@ it('documents both order 422 bodies as anyOf branches carrying VALIDATION_FAILED
         ->and($codes)->toEqualCanonicalizing(['VALIDATION_FAILED', 'SEATS_NOT_HELD']);
 });
 
+it('describes the organizer event list as exactly data, links and meta of EventResource items', function (): void {
+    $schema = openApiResponseSchema('get', '/api/v1/organizer/events', '200');
+
+    expect(array_keys((array) data_get($schema, 'properties')))->toBe(['data', 'links', 'meta'])
+        ->and(data_get($schema, 'properties.data.type'))->toBe('array')
+        ->and(data_get($schema, 'properties.data.items'))->toBe(['$ref' => '#/components/schemas/EventResource']);
+});
+
+it('describes one organizer event as a bare EventDetailResource reference', function (): void {
+    expect(openApiResponseSchema('get', '/api/v1/organizer/events/{id}', '200'))->toBe(['$ref' => '#/components/schemas/EventDetailResource']);
+});
+
+it('describes the organizer venues as a bare array of VenueResource', function (): void {
+    expect(openApiResponseSchema('get', '/api/v1/organizer/venues', '200'))->toBe([
+        'type' => 'array',
+        'items' => ['$ref' => '#/components/schemas/VenueResource'],
+    ]);
+});
+
 it('documents a 402 PAYMENT_DECLINED body on the order endpoint', function (): void {
     $schema = openApiResponseSchema('post', '/api/v1/orders', '402');
 
@@ -93,7 +115,7 @@ it('types starts_at as a date-time string in every schema that carries it', func
     }
 });
 
-it('documents all fifteen endpoints with their method and path, and nothing else', function (): void {
+it('documents all eighteen endpoints with their method and path, and nothing else', function (): void {
     $endpoints = array_merge(PUBLIC_ENDPOINTS, PROTECTED_ENDPOINTS);
 
     $documented = [];
@@ -104,7 +126,7 @@ it('documents all fifteen endpoints with their method and path, and nothing else
         }
     }
 
-    expect($endpoints)->toHaveCount(15)
+    expect($endpoints)->toHaveCount(18)
         ->and($documented)->toEqualCanonicalizing($endpoints);
 });
 
@@ -120,7 +142,7 @@ it('opts the five public endpoints out of the global security requirement', func
     }
 });
 
-it('leaves the ten protected endpoints inheriting the global security requirement', function (): void {
+it('leaves the thirteen protected endpoints inheriting the global security requirement', function (): void {
     foreach (PROTECTED_ENDPOINTS as [$method, $path]) {
         expect(data_get(openApiOperation($method, $path), 'security'))->toBeNull($method.' '.$path);
     }

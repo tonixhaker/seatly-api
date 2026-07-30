@@ -18,6 +18,11 @@ interface EventRepositoryInterface
      */
     public function paginatePublished(EventFilter $filter): LengthAwarePaginator;
 
+    /**
+     * @return LengthAwarePaginator<int, Event>
+     */
+    public function paginateOwnedByOrganizer(int $organizerId, EventFilter $filter): LengthAwarePaginator;
+
     public function findPublished(int $id): ?Event;
 
     public function findOwnedByOrganizer(int $id, int $organizerId): ?Event;

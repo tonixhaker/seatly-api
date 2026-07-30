@@ -26,6 +26,11 @@ $fakeEvents = function (?array $stats): EventRepositoryInterface {
             return new LengthAwarePaginator([], 0, 15, 1);
         }
 
+        public function paginateOwnedByOrganizer(int $organizerId, EventFilter $filter): LengthAwarePaginator
+        {
+            return new LengthAwarePaginator([], 0, 15, 1);
+        }
+
         public function findPublished(int $id): ?Event
         {
             return null;
