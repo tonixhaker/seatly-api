@@ -55,11 +55,23 @@ $fakeRepository = function (?LengthAwarePaginator $page = null, ?Event $found = 
     {
         public ?EventFilter $seen = null;
 
+        public ?int $seenOrganizerId = null;
+
+        public ?int $seenId = null;
+
         public function __construct(private readonly ?LengthAwarePaginator $page, private readonly ?Event $found, private readonly ?Collection $seats) {}
 
         public function paginatePublished(EventFilter $filter): LengthAwarePaginator
         {
             $this->seen = $filter;
+
+            return $this->page ?? new LengthAwarePaginator([], 0, 15, 1);
+        }
+
+        public function paginateOwnedByOrganizer(int $organizerId, EventFilter $filter): LengthAwarePaginator
+        {
+            $this->seen = $filter;
+            $this->seenOrganizerId = $organizerId;
 
             return $this->page ?? new LengthAwarePaginator([], 0, 15, 1);
         }
@@ -71,7 +83,10 @@ $fakeRepository = function (?LengthAwarePaginator $page = null, ?Event $found = 
 
         public function findOwnedByOrganizer(int $id, int $organizerId): ?Event
         {
-            return null;
+            $this->seenId = $id;
+            $this->seenOrganizerId = $organizerId;
+
+            return $this->found;
         }
 
         public function seatsForPublished(int $eventId): ?Collection
@@ -166,4 +181,44 @@ it('preserves the repository order and adds no sort of its own', function () use
 
 it('returns an empty list, not null, for a published event with no seats', function () use ($fakeRepository): void {
     expect((new EventCatalogService($fakeRepository(null, null, new Collection)))->seatsForPublished(1))->toBe([]);
+});
+
+it('maps every owned event in the page to a DTO and keeps the pagination numbers', function () use ($makeEvent, $fakeRepository): void {
+    $page = new LengthAwarePaginator([$makeEvent(3, 'Spring Gala'), $makeEvent(1, 'Autumn Symphony')], 5, 2, 1);
+
+    $result = (new EventCatalogService($fakeRepository($page)))->listOwnedByOrganizer(10, new EventFilter);
+
+    expect($result->items())->toHaveCount(2)
+        ->each->toBeInstanceOf(EventData::class)
+        ->and(array_map(fn (EventData $event): int => $event->id, $result->items()))->toBe([3, 1])
+        ->and($result->items()[0]->title)->toBe('Spring Gala')
+        ->and($result->total())->toBe(5)
+        ->and($result->perPage())->toBe(2);
+});
+
+it('hands the repository the caller organizer id and the exact filter for the owned list', function () use ($fakeRepository): void {
+    $repository = $fakeRepository();
+    $filter = new EventFilter(starts_from: '2026-11-01', page: 2, per_page: 3);
+
+    (new EventCatalogService($repository))->listOwnedByOrganizer(10, $filter);
+
+    expect($repository->seenOrganizerId)->toBe(10)
+        ->and($repository->seen)->toBe($filter);
+});
+
+it('returns null when the organizer owns no such event, so the caller can 404', function () use ($fakeRepository): void {
+    $repository = $fakeRepository();
+
+    expect((new EventCatalogService($repository))->findOwnedByOrganizer(3, 10))->toBeNull()
+        ->and($repository->seenId)->toBe(3)
+        ->and($repository->seenOrganizerId)->toBe(10);
+});
+
+it('maps an owned event, its venue included, to a DTO', function () use ($makeEvent, $fakeRepository): void {
+    $data = (new EventCatalogService($fakeRepository(null, $makeEvent(42, 'Spring Gala'))))->findOwnedByOrganizer(42, 10);
+
+    expect($data)->toBeInstanceOf(EventData::class)
+        ->and($data?->id)->toBe(42)
+        ->and($data?->title)->toBe('Spring Gala')
+        ->and($data?->venue->name)->toBe('Riverside Arena');
 });

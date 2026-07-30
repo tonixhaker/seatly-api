@@ -10,6 +10,7 @@ use App\Domain\Event\Enums\EventStatus;
 use App\Domain\Event\Exceptions\InvalidEventTransitionException;
 use App\Domain\Event\Models\Event;
 use App\Domain\Event\Repositories\EventRepositoryInterface;
+use App\Domain\Venue\DTO\VenueData;
 use App\Domain\Venue\Models\Venue;
 use App\Domain\Venue\Repositories\VenueRepositoryInterface;
 use Illuminate\Support\Carbon;
@@ -69,6 +70,14 @@ final readonly class EventDraftService
         $event->setRelation('venue', $venue);
 
         return EventData::fromModel($event);
+    }
+
+    /**
+     * @return list<VenueData>
+     */
+    public function venues(): array
+    {
+        return array_values($this->venues->all()->map(fn (Venue $venue): VenueData => VenueData::fromModel($venue))->all());
     }
 
     private function venue(int $id): Venue

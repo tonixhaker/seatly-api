@@ -28,10 +28,13 @@ Route::middleware('auth:sanctum')->group(function (): void {
     });
 
     Route::middleware('role:organizer')->group(function (): void {
+        Route::get('organizer/events', [OrganizerController::class, 'index']);
         Route::post('organizer/events', [OrganizerController::class, 'store']);
+        Route::get('organizer/events/{id}', [OrganizerController::class, 'show'])->where('id', '[0-9]{1,18}');
         Route::put('organizer/events/{id}', [OrganizerController::class, 'update'])->where('id', '[0-9]{1,18}');
         Route::post('organizer/events/{id}/publish', [OrganizerController::class, 'publish'])->where('id', '[0-9]{1,18}');
         Route::get('organizer/events/{id}/stats', [OrganizerController::class, 'stats'])->where('id', '[0-9]{1,18}');
         Route::post('organizer/check-in', [OrganizerController::class, 'checkIn']);
+        Route::get('organizer/venues', [OrganizerController::class, 'venues']);
     });
 });

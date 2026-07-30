@@ -24,11 +24,21 @@ final class EloquentEventRepository implements EventRepositoryInterface
 
     public function paginatePublished(EventFilter $filter): LengthAwarePaginator
     {
-        $query = Event::query()
-            ->with('venue')
-            ->where('status', EventStatus::Published)
-            ->orderBy('starts_at')
-            ->orderBy('id');
+        return $this->paginate(Event::query()->where('status', EventStatus::Published), $filter);
+    }
+
+    public function paginateOwnedByOrganizer(int $organizerId, EventFilter $filter): LengthAwarePaginator
+    {
+        return $this->paginate(Event::query()->where('organizer_id', $organizerId), $filter);
+    }
+
+    /**
+     * @param  Builder<Event>  $query
+     * @return LengthAwarePaginator<int, Event>
+     */
+    private function paginate(Builder $query, EventFilter $filter): LengthAwarePaginator
+    {
+        $query->with('venue')->orderBy('starts_at')->orderBy('id');
 
         if ($filter->starts_from !== null) {
             $query->whereDate('starts_at', '>=', $filter->starts_from);
