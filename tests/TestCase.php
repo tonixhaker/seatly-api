@@ -6,12 +6,29 @@ namespace Tests;
 
 use App\Domain\User\Enums\UserRole;
 use App\Domain\User\Models\User;
+use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use RuntimeException;
 
 abstract class TestCase extends BaseTestCase
 {
+    public function createApplication(): Application
+    {
+        $app = parent::createApplication();
+
+        $config = $app->make('config');
+        $connection = $config->get('database.default');
+        $database = $config->get('database.connections.pgsql.database');
+
+        if ($connection !== 'pgsql' || $database !== 'seatly_test') {
+            throw new RuntimeException('Refusing to run tests against '.json_encode([$connection, $database]).', only pgsql/seatly_test.');
+        }
+
+        return $app;
+    }
+
     /**
      * @return array{organizer: int, arena: int, hall: int, published: list<int>, draft: int, archived: int, empty: int, sold: list<int>}
      */
