@@ -104,13 +104,12 @@ docker compose exec -T postgres psql -U seatly -d postgres -c 'CREATE DATABASE s
 ```
 
 The suite drops and recreates every table in `seatly_test` on each run, and never touches
-the `seatly` development database. With no local PHP, run it from the built image:
+the `seatly` development database. With no local PHP, run it from the superproject root in
+the `api-test` container, built from this Dockerfile's `test` stage (dev dependencies) with
+this checkout bind-mounted. The production image has no dev dependencies and cannot run it:
 
 ```bash
-docker run --rm -v "$PWD":/var/www/html -w /var/www/html \
-  --network seatly_default --user "$(id -u)" \
-  -e DB_HOST=postgres -e DB_USERNAME=seatly -e DB_PASSWORD=seatly \
-  seatly-api vendor/bin/pest
+docker compose run --rm --build api-test php artisan test
 ```
 
 One test needs a live broker: `RabbitMqPublisherIntegrationTest` publishes a real message
@@ -118,7 +117,7 @@ and consumes it back to prove the routing key is the event type. It **skips** wh
 `RABBITMQ_TEST_URL` is unset, so add it when the Compose stack is up:
 
 ```bash
--e RABBITMQ_TEST_URL=amqp://seatly:seatly@rabbitmq:5672
+docker compose run --rm -e RABBITMQ_TEST_URL=amqp://seatly:seatly@rabbitmq:5672 api-test php artisan test
 ```
 
 CI sets the same variable against its own broker service, so the test is gated there rather
@@ -130,7 +129,7 @@ the different-session and different-event cases a stub cannot distinguish. They 
 when `REALTIME_TEST_URL` is unset:
 
 ```bash
--e REALTIME_TEST_URL=http://realtime:3000 -e INTERNAL_TOKEN=local-internal-token
+docker compose run --rm -e REALTIME_TEST_URL=http://realtime:3000 api-test php artisan test
 ```
 
 CI has no realtime service, so these six skip there; the timeout is covered unconditionally
