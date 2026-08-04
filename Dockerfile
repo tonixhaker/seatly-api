@@ -1,4 +1,4 @@
-FROM php:8.4.25-fpm-alpine
+FROM php:8.4.25-fpm-alpine AS base
 
 COPY --from=composer/composer:2.9.3-bin /composer /usr/bin/composer
 
@@ -14,6 +14,12 @@ COPY docker/supervisord.conf /etc/supervisord.conf
 WORKDIR /var/www/html
 
 COPY composer.json composer.lock ./
+
+FROM base AS test
+
+RUN composer install --no-interaction --no-progress --prefer-dist --no-scripts
+
+FROM base
 
 RUN composer install --no-dev --no-interaction --no-progress --prefer-dist --no-scripts --no-autoloader
 
