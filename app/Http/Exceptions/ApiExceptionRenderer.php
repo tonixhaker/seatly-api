@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
@@ -26,7 +27,7 @@ final class ApiExceptionRenderer
             return null;
         }
 
-        return match (true) {
+        $response = match (true) {
             $e instanceof HttpResponseException => null,
             $e instanceof DomainException => self::envelope($e->errorCode(), $e->getMessage(), $e->details),
             $e instanceof ValidationException => self::envelope(ErrorCode::VALIDATION_FAILED, $e->getMessage(), $e->errors()),
@@ -36,6 +37,17 @@ final class ApiExceptionRenderer
             $e instanceof HttpExceptionInterface => self::fromStatus($e->getStatusCode(), $e->getHeaders()),
             default => self::envelope(ErrorCode::INTERNAL_ERROR, 'An unexpected error occurred.'),
         };
+
+        if ($response !== null && $response->getStatusCode() < 500) {
+            Log::warning('Request failed.', [
+                'method' => $request->method(),
+                'path' => $request->path(),
+                'status' => $response->getStatusCode(),
+                'code' => data_get($response->getData(true), 'error.code'),
+            ]);
+        }
+
+        return $response;
     }
 
     /**

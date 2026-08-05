@@ -5,13 +5,13 @@ declare(strict_types=1);
 use App\Domain\Shared\Exceptions\DomainException;
 use App\Http\Controllers\HealthController;
 use App\Http\Exceptions\ApiExceptionRenderer;
+use App\Http\Middleware\AssignRequestId;
 use App\Http\Middleware\EnsureRole;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use Psr\Log\LogLevel;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -25,10 +25,11 @@ return Application::configure(basePath: dirname(__DIR__))
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->prepend(AssignRequestId::class);
         $middleware->alias(['role' => EnsureRole::class]);
         $middleware->redirectGuestsTo(fn (): ?string => null);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        $exceptions->level(DomainException::class, LogLevel::WARNING);
+        $exceptions->dontReport(DomainException::class);
         $exceptions->render(fn (Throwable $e, Request $request) => ApiExceptionRenderer::render($e, $request));
     })->create();
