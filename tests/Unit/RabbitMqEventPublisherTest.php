@@ -7,11 +7,23 @@ use App\Domain\Shared\Contracts\DomainEvent;
 use App\Infrastructure\Messaging\EnvelopeSchemaValidator;
 use App\Infrastructure\Messaging\InvalidEventEnvelopeException;
 use App\Infrastructure\Messaging\RabbitMqEventPublisher;
+use Illuminate\Events\Dispatcher;
+use Illuminate\Log\Context\Repository;
+use Illuminate\Support\Facades\Context;
+use Opis\JsonSchema\Validator;
 use PhpAmqpLib\Connection\AMQPStreamConnection;
 use PhpAmqpLib\Message\AMQPMessage;
 use Psr\Log\AbstractLogger;
 
 $schemaDirectory = dirname(__DIR__, 2).'/docs/events';
+
+beforeEach(function (): void {
+    Context::swap(new Repository(new Dispatcher));
+});
+
+afterEach(function (): void {
+    Context::clearResolvedInstances();
+});
 
 $spyLogger = function (): AbstractLogger {
     return new class extends AbstractLogger
@@ -108,6 +120,34 @@ $fakeBroker = function (?Closure $onPublish = null): object {
             $this->closes++;
         }
     };
+};
+
+$publishOne = function () use ($schemaDirectory, $spyLogger, $fakeBroker): array {
+    $logger = $spyLogger();
+    $broker = $fakeBroker();
+
+    $publisher = new RabbitMqEventPublisher(
+        static fn (): object => $broker->open(),
+        'seatly.events',
+        new EnvelopeSchemaValidator($schemaDirectory),
+        $logger,
+    );
+
+    $publisher->publish(new EventPublished(9, [1, 2]));
+
+    return [$broker, $logger];
+};
+
+$assertEnvelopeUnchanged = function (AMQPMessage $message) use ($schemaDirectory): void {
+    $validator = new Validator;
+    $validator->resolver()?->registerPrefix('https://schemas.seatly.dev/events/', $schemaDirectory);
+
+    $body = json_decode($message->getBody(), false, 512, JSON_THROW_ON_ERROR);
+    $result = $validator->validate($body, 'https://schemas.seatly.dev/events/event.published.json');
+
+    expect(array_keys(get_object_vars($body)))->toBe(['event_id', 'event_type', 'occurred_at', 'version', 'payload'])
+        ->and($result->isValid())->toBeTrue()
+        ->and($message->get('message_id'))->toBe($body->event_id);
 };
 
 it('never opens a broker connection when the message fails its schema', function () use ($schemaDirectory, $spyLogger, $badEvent): void {
@@ -238,3 +278,32 @@ it('lets a programming error out of the send path rather than logging it as a br
     'a type error' => [TypeError::class],
     'a value error' => [ValueError::class],
 ]);
+
+it('carries the request id in scope as an x-request-id AMQP header without touching the envelope', function () use ($publishOne, $assertEnvelopeUnchanged): void {
+    $requestId = '3f2b8c1e-5d4a-4e6f-9a7b-1c2d3e4f5a6b';
+    Context::add('request_id', $requestId);
+
+    [$broker, $logger] = $publishOne();
+
+    expect($broker->channel->published)->toHaveCount(1);
+
+    $message = $broker->channel->published[0]['message'];
+
+    expect($message->get('application_headers')->getNativeData()['x-request-id'])->toBe($requestId)
+        ->and($logger->records)->toBe([]);
+
+    $assertEnvelopeUnchanged($message);
+});
+
+it('publishes without application headers when no request id is in scope', function () use ($publishOne, $assertEnvelopeUnchanged): void {
+    [$broker, $logger] = $publishOne();
+
+    expect($broker->channel->published)->toHaveCount(1);
+
+    $message = $broker->channel->published[0]['message'];
+
+    expect($message->has('application_headers'))->toBeFalse()
+        ->and($logger->records)->toBe([]);
+
+    $assertEnvelopeUnchanged($message);
+});

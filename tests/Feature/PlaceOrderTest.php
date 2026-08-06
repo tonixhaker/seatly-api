@@ -183,6 +183,19 @@ it('never asks realtime to release the hold on a decline', function () use ($gat
     Http::assertSent(fn ($request): bool => $request->method() === 'GET' && str_contains($request->url(), '/internal/holds/validate'));
 });
 
+it('forwards the X-Request-Id of the order request to the holds validation call', function () use ($gateway, $payload): void {
+    $requestId = '3f2b8c1e-5d4a-4e6f-9a7b-1c2d3e4f5a6b';
+    $world = $this->seedPurchasable(2);
+    $this->instance(PaymentGatewayInterface::class, $gateway());
+
+    $this->actingAs($world['buyer'], 'sanctum')
+        ->postJson('/api/v1/orders', $payload($world), ['X-Request-Id' => $requestId])
+        ->assertStatus(201);
+
+    Http::assertSent(fn ($request): bool => str_contains($request->url(), '/internal/holds/validate')
+        && $request->header('X-Request-Id') === [$requestId]);
+});
+
 it('lets the buyer retry a declined order against the surviving hold', function () use ($gateway, $payload): void {
     $world = $this->seedPurchasable(2);
     $this->instance(PaymentGatewayInterface::class, $card = $gateway(approved: false));

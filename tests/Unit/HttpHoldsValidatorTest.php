@@ -5,9 +5,21 @@ declare(strict_types=1);
 use App\Domain\Order\Exceptions\HoldsValidationUnavailableException;
 use App\Domain\Shared\Enums\ErrorCode;
 use App\Infrastructure\Realtime\HttpHoldsValidator;
+use Illuminate\Events\Dispatcher;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory;
+use Illuminate\Http\Client\Request;
+use Illuminate\Log\Context\Repository;
+use Illuminate\Support\Facades\Context;
 use Psr\Log\AbstractLogger;
+
+beforeEach(function (): void {
+    Context::swap(new Repository(new Dispatcher));
+});
+
+afterEach(function (): void {
+    Context::clearResolvedInstances();
+});
 
 $spyLogger = static fn (): object => new class extends AbstractLogger
 {
@@ -82,6 +94,28 @@ it('sends the token as a header and never puts it in the url', function () use (
 
     expect($header)->toBe('shared-secret-token')
         ->and($url)->not->toContain('shared-secret-token');
+});
+
+it('forwards the request id in scope next to the internal token', function () use ($spyLogger, $makeValidator, $fakeReturning): void {
+    $requestId = '3f2b8c1e-5d4a-4e6f-9a7b-1c2d3e4f5a6b';
+    Context::add('request_id', $requestId);
+    $http = $fakeReturning(['valid' => true, 'missing' => []]);
+
+    $makeValidator($http, $spyLogger())->missingSeats(1, [1], 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee');
+
+    $http->assertSentCount(1);
+    $http->assertSent(fn (Request $request): bool => $request->header('X-Request-Id') === [$requestId]
+        && $request->header('X-Internal-Token') === ['shared-secret-token']);
+});
+
+it('sends no request id header when no request id is in scope', function () use ($spyLogger, $makeValidator, $fakeReturning): void {
+    $http = $fakeReturning(['valid' => true, 'missing' => []]);
+
+    expect($makeValidator($http, $spyLogger())->missingSeats(1, [1], 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'))->toBe([]);
+
+    $http->assertSentCount(1);
+    $http->assertSent(fn (Request $request): bool => ! $request->hasHeader('X-Request-Id')
+        && $request->header('X-Internal-Token') === ['shared-secret-token']);
 });
 
 it('returns the missing list verbatim without sorting or deduping', function () use ($spyLogger, $makeValidator, $fakeReturning): void {
