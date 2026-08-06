@@ -8,6 +8,7 @@ use App\Domain\Order\Contracts\HoldsValidatorInterface;
 use App\Domain\Order\Exceptions\HoldsValidationUnavailableException;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory;
+use Illuminate\Support\Facades\Context;
 use Psr\Log\LoggerInterface;
 
 final readonly class HttpHoldsValidator implements HoldsValidatorInterface
@@ -15,6 +16,8 @@ final readonly class HttpHoldsValidator implements HoldsValidatorInterface
     private const UNAVAILABLE_MESSAGE = 'Seat holds could not be verified. Please try again in a moment.';
 
     private const TOKEN_HEADER = 'X-Internal-Token';
+
+    private const REQUEST_ID_HEADER = 'X-Request-Id';
 
     public function __construct(
         private Factory $http,
@@ -36,9 +39,16 @@ final readonly class HttpHoldsValidator implements HoldsValidatorInterface
             return $this->fail('error', 'unconfigured', $eventId, $seatIds);
         }
 
+        $headers = [self::TOKEN_HEADER => $this->internalToken];
+        $requestId = Context::get('request_id');
+
+        if (is_string($requestId) && $requestId !== '') {
+            $headers[self::REQUEST_ID_HEADER] = $requestId;
+        }
+
         try {
             $response = $this->http
-                ->withHeaders([self::TOKEN_HEADER => $this->internalToken])
+                ->withHeaders($headers)
                 ->timeout($this->timeoutSeconds)
                 ->connectTimeout($this->timeoutSeconds)
                 ->get($baseUrl.'/internal/holds/validate?'.self::query($eventId, $seatIds, $sessionId));

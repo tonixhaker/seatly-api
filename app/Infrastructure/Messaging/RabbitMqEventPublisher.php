@@ -7,9 +7,11 @@ namespace App\Infrastructure\Messaging;
 use App\Domain\Shared\Contracts\DomainEvent;
 use App\Domain\Shared\Contracts\EventPublisherInterface;
 use ErrorException;
+use Illuminate\Support\Facades\Context;
 use PhpAmqpLib\Connection\AMQPStreamConnection;
 use PhpAmqpLib\Exception\AMQPExceptionInterface;
 use PhpAmqpLib\Message\AMQPMessage;
+use PhpAmqpLib\Wire\AMQPTable;
 use Psr\Log\LoggerInterface;
 use RuntimeException;
 
@@ -44,17 +46,24 @@ final readonly class RabbitMqEventPublisher implements EventPublisherInterface
 
     private function send(EventEnvelope $envelope): void
     {
+        $properties = [
+            'content_type' => 'application/json',
+            'delivery_mode' => AMQPMessage::DELIVERY_MODE_PERSISTENT,
+            'message_id' => $envelope->event_id,
+        ];
+        $requestId = Context::get('request_id');
+
+        if (is_string($requestId) && $requestId !== '') {
+            $properties['application_headers'] = new AMQPTable(['x-request-id' => $requestId]);
+        }
+
         $connection = ($this->connect)();
 
         try {
             $channel = $connection->channel();
             $channel->exchange_declare($this->exchange, 'topic', false, true, false);
             $channel->basic_publish(
-                new AMQPMessage($envelope->toJson(), [
-                    'content_type' => 'application/json',
-                    'delivery_mode' => AMQPMessage::DELIVERY_MODE_PERSISTENT,
-                    'message_id' => $envelope->event_id,
-                ]),
+                new AMQPMessage($envelope->toJson(), $properties),
                 $this->exchange,
                 $envelope->routingKey(),
             );
