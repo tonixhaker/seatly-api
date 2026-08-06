@@ -10,6 +10,7 @@ RUN apk add --no-cache nginx supervisor curl libpq \
 
 COPY docker/nginx.conf /etc/nginx/nginx.conf
 COPY docker/supervisord.conf /etc/supervisord.conf
+COPY docker/php-fpm.conf /usr/local/etc/php-fpm.d/zz-logging.conf
 
 WORKDIR /var/www/html
 
