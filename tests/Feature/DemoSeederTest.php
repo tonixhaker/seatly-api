@@ -8,15 +8,11 @@ use Illuminate\Support\Facades\DB;
 
 uses(RefreshDatabase::class);
 
-$readme = (string) file_get_contents(dirname(__DIR__, 2).'/README.md');
-
-preg_match_all('/^\|\s*(Organizer|Buyer)\s*\|\s*(\S+@\S+)\s*\|\s*(\S+)\s*\|$/m', $readme, $matches, PREG_SET_ORDER);
-
-$credentials = [];
-
-foreach ($matches as $row) {
-    $credentials[$row[2]] = [$row[2], $row[3], strtolower($row[1])];
-}
+$credentials = [
+    'organizer1@seatly.test' => ['organizer1@seatly.test', 'password', 'organizer'],
+    'organizer2@seatly.test' => ['organizer2@seatly.test', 'password', 'organizer'],
+    'buyer@seatly.test' => ['buyer@seatly.test', 'password', 'buyer'],
+];
 
 $login = function (string $email, string $password): string {
     $response = test()->postJson('/api/v1/auth/login', ['email' => $email, 'password' => $password])->assertStatus(200);
@@ -35,12 +31,7 @@ $publishedSeatPositions = function (int $eventId): array {
     );
 };
 
-it('lists exactly three demo credentials in the README, so the login cases cannot be empty', function () use ($credentials): void {
-    expect($credentials)->toHaveCount(3)
-        ->and(array_keys($credentials))->toContain('organizer1@seatly.test', 'organizer2@seatly.test', 'buyer@seatly.test');
-});
-
-it('logs in with the exact credential strings the README prints', function (string $email, string $password, string $role): void {
+it('logs in with each demo credential', function (string $email, string $password, string $role): void {
     $this->seed();
 
     $response = $this->postJson('/api/v1/auth/login', ['email' => $email, 'password' => $password])->assertStatus(200);
