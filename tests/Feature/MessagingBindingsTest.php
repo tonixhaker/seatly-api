@@ -65,7 +65,7 @@ it('feeds that configuration into the gateway rather than hardcoding a delay', f
         ->and($elapsedMs)->toBeLessThan(400.0);
 });
 
-it('logs the whole envelope rather than the bare payload, so the stub meets the same contract as the broker', function (): void {
+it('logs only the event type and envelope id, never the payload', function (): void {
     $logger = new class extends AbstractLogger
     {
         /** @var list<array{message: string|Stringable, context: array<mixed>}> */
@@ -83,9 +83,9 @@ it('logs the whole envelope rather than the bare payload, so the stub meets the 
 
     expect($logger->records)->toHaveCount(1)
         ->and($logger->records[0]['message'])->toBe('event.published')
-        ->and(array_keys($logger->records[0]['context']))
-        ->toBe(['event_id', 'event_type', 'occurred_at', 'version', 'payload'])
-        ->and($logger->records[0]['context']['payload'])->toBe(['event_id' => 7, 'seat_ids' => [1, 2, 3]]);
+        ->and(array_keys($logger->records[0]['context']))->toBe(['event_type', 'event_id'])
+        ->and($logger->records[0]['context']['event_type'])->toBe('event.published')
+        ->and($logger->records[0]['context']['event_id'])->toBeString()->toBeUuid();
 });
 
 it('refuses to log a message its own schema rejects, so the stub cannot drift from the contract', function (): void {
