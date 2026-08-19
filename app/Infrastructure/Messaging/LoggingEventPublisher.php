@@ -21,6 +21,9 @@ final readonly class LoggingEventPublisher implements EventPublisherInterface
 
         $this->validator->assertValid($envelope);
 
-        $this->logger->info($envelope->event_type, $envelope->toArray());
+        $this->logger->info($envelope->event_type, [
+            'event_type' => $envelope->event_type,
+            'event_id' => $envelope->event_id,
+        ]);
     }
 }
