@@ -9,20 +9,26 @@ use Illuminate\Http\Client\Factory;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
-$realtimeUrl = function (): string {
+$internalToken = function (): string {
+    $token = getenv('REALTIME_TEST_TOKEN');
+
+    if (! is_string($token) || $token === '') {
+        test()->markTestSkipped('REALTIME_TEST_TOKEN is not set; the holds integration test needs the INTERNAL_TOKEN of that seatly-realtime.');
+    }
+
+    return $token;
+};
+
+$realtimeUrl = function () use ($internalToken): string {
     $url = getenv('REALTIME_TEST_URL');
 
     if (! is_string($url) || $url === '') {
         test()->markTestSkipped('REALTIME_TEST_URL is not set; the holds integration test needs a live seatly-realtime.');
     }
 
+    $internalToken();
+
     return rtrim($url, '/');
-};
-
-$internalToken = function (): string {
-    $token = getenv('INTERNAL_TOKEN');
-
-    return is_string($token) && $token !== '' ? $token : 'local-internal-token';
 };
 
 $validator = function (string $url, string $token) use ($internalToken): HoldsValidatorInterface {

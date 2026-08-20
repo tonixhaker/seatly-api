@@ -7,10 +7,12 @@ it('pins the test database and outbound integrations in $_SERVER, where a contai
         ->and($_SERVER['DB_DATABASE'] ?? null)->toBe('seatly_test')
         ->and($_SERVER['RABBITMQ_URL'] ?? null)->toBe('')
         ->and($_SERVER['REALTIME_URL'] ?? null)->toBe('http://realtime.invalid')
+        ->and($_SERVER['INTERNAL_TOKEN'] ?? null)->toBe(str_repeat('5eed', 16))
         ->and($_SERVER['APP_ENV'] ?? null)->toBe('testing')
         ->and(config('database.connections.pgsql.database'))->toBe('seatly_test')
         ->and(config('messaging.rabbitmq.url'))->toBe('')
-        ->and(config('realtime.base_url'))->toBe('http://realtime.invalid');
+        ->and(config('realtime.base_url'))->toBe('http://realtime.invalid')
+        ->and(config('realtime.internal_token'))->toBe(str_repeat('5eed', 16));
 });
 
 it('refuses to boot the application when the database is not seatly_test', function (): void {
