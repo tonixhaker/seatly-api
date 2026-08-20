@@ -48,6 +48,7 @@ local PHP or Composer.
 docker build -t seatly-api .
 docker run --rm --name seatly-api -p 8000:8000 \
   -e APP_KEY=base64:$(openssl rand -base64 32) \
+  -e INTERNAL_TOKEN=$(openssl rand -hex 32) \
   -e DB_CONNECTION=pgsql -e DB_HOST=host.docker.internal -e DB_DATABASE=seatly \
   -e DB_USERNAME=seatly -e DB_PASSWORD=seatly \
   seatly-api
@@ -108,7 +109,9 @@ no-broker implementation, not a weaker path.
 `REALTIME_URL` is where `seatly-api` reaches `seatly-realtime` for hold validation at
 checkout, and `INTERNAL_TOKEN` is the shared secret for that call, both supplied as
 environment variables. The token is sent as the `X-Internal-Token` header and never as a
-query parameter, so it stays out of URLs, logs and exception messages.
+query parameter, so it stays out of URLs, logs and exception messages. The web process refuses to
+serve any request, `/health` included, while `INTERNAL_TOKEN` is empty; `artisan` commands
+never call realtime and run without it.
 
 ## Tests
 
@@ -161,10 +164,11 @@ than only run by hand.
 Six tests need a live `seatly-realtime`: `HoldsValidatorIntegrationTest` takes real holds
 through `POST /holds` and checks them back through `GET /internal/holds/validate`, including
 the different-session and different-event cases a stub cannot distinguish. They **skip**
-when `REALTIME_TEST_URL` is unset; point it at a running realtime:
+when `REALTIME_TEST_URL` or `REALTIME_TEST_TOKEN` is unset; point them at a running realtime
+and its token:
 
 ```bash
--e REALTIME_TEST_URL=http://host.docker.internal:3000
+-e REALTIME_TEST_URL=http://host.docker.internal:3000 -e REALTIME_TEST_TOKEN=<that realtime's INTERNAL_TOKEN>
 ```
 
 CI has no realtime service, so these six skip there; the timeout is covered unconditionally
@@ -173,7 +177,9 @@ by `tests/Unit/HttpHoldsValidatorTest.php` against a socket that never answers.
 `phpunit.xml` forces `RABBITMQ_URL` empty and `REALTIME_URL` to `http://realtime.invalid`,
 which keeps every other test on the logging publisher and on a faked HTTP client. Without
 those forces, a developer whose `.env` points at a running broker or realtime would publish
-real messages and make real validation calls during the suite while CI did not.
+real messages and make real validation calls during the suite while CI did not. It also
+forces `INTERNAL_TOKEN` to a fixed test value, which is why the integration test reads its
+token from `REALTIME_TEST_TOKEN` instead.
 
 The unit suite is the other half of the contract: it must pass with **no database at
 all**. `tests/Pest.php` binds `Tests\TestCase` to `Feature` only, so nothing under
