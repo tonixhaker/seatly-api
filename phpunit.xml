@@ -30,6 +30,7 @@
         <env name="RABBITMQ_URL" value="" force="true"/>
         <env name="REALTIME_URL" value="http://realtime.invalid" force="true"/>
         <env name="INTERNAL_TOKEN" value="5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed" force="true"/>
+        <env name="WEB_ORIGIN" value="http://localhost:5173" force="true"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
@@ -45,6 +46,7 @@
         <server name="RABBITMQ_URL" value=""/>
         <server name="REALTIME_URL" value="http://realtime.invalid"/>
         <server name="INTERNAL_TOKEN" value="5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed"/>
+        <server name="WEB_ORIGIN" value="http://localhost:5173"/>
         <server name="SESSION_DRIVER" value="array"/>
     </php>
 </phpunit>
