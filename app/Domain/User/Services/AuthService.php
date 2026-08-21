@@ -13,6 +13,7 @@ use App\Domain\User\Models\User;
 use App\Domain\User\Repositories\UserRepositoryInterface;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\Hashing\Hasher;
+use Illuminate\Support\Carbon;
 use Laravel\Sanctum\PersonalAccessToken;
 
 final readonly class AuthService
@@ -20,6 +21,7 @@ final readonly class AuthService
     public function __construct(
         private UserRepositoryInterface $users,
         private Hasher $hasher,
+        private int $tokenTtlMinutes,
     ) {}
 
     public function register(RegisterUserData $data): AuthResult
@@ -59,6 +61,6 @@ final readonly class AuthService
 
     private function issue(User $user): AuthResult
     {
-        return new AuthResult($user->createToken('api')->plainTextToken, UserData::fromModel($user));
+        return new AuthResult($user->createToken('api', ['*'], Carbon::now()->addMinutes($this->tokenTtlMinutes))->plainTextToken, UserData::fromModel($user));
     }
 }

@@ -35,6 +35,8 @@ return [
         ],
     ],
 
+    'token_ttl_minutes' => (int) env('SANCTUM_TOKEN_TTL_MINUTES', 120),
+
     'password_timeout' => env('AUTH_PASSWORD_TIMEOUT', 10800),
 
 ];
