@@ -11,6 +11,7 @@ use App\Domain\Order\Repositories\OrderRepositoryInterface;
 use App\Domain\Shared\Contracts\EventPublisherInterface;
 use App\Domain\Ticket\Repositories\TicketRepositoryInterface;
 use App\Domain\User\Repositories\UserRepositoryInterface;
+use App\Domain\User\Services\AuthService;
 use App\Domain\Venue\Repositories\VenueRepositoryInterface;
 use App\Infrastructure\Messaging\EnvelopeSchemaValidator;
 use App\Infrastructure\Messaging\LoggingEventPublisher;
@@ -41,6 +42,10 @@ final class DomainServiceProvider extends ServiceProvider
         $this->app->bind(UserRepositoryInterface::class, EloquentUserRepository::class);
         $this->app->bind(OrderRepositoryInterface::class, EloquentOrderRepository::class);
         $this->app->bind(TicketRepositoryInterface::class, EloquentTicketRepository::class);
+
+        $this->app->when(AuthService::class)
+            ->needs('$tokenTtlMinutes')
+            ->give(static fn (): int => Config::integer('auth.token_ttl_minutes'));
 
         $this->app->singleton(EnvelopeSchemaValidator::class, static function (): EnvelopeSchemaValidator {
             return new EnvelopeSchemaValidator(Config::string('messaging.schema_path'));

@@ -60,14 +60,14 @@ $existing = function (): User {
 };
 
 it('rejects a login for an unknown email', function () use ($repository, $hasher): void {
-    $service = new AuthService($repository(null), $hasher(true));
+    $service = new AuthService($repository(null), $hasher(true), 120);
 
     expect(fn () => $service->login(new LoginCredentials('nobody@example.com', 'correct-horse')))
         ->toThrow(InvalidCredentialsException::class);
 });
 
 it('rejects a login whose password does not match the stored hash', function () use ($repository, $hasher, $existing): void {
-    $service = new AuthService($repository($existing()), $hasher(false));
+    $service = new AuthService($repository($existing()), $hasher(false), 120);
 
     expect(fn () => $service->login(new LoginCredentials('ada@example.com', 'wrong')))
         ->toThrow(InvalidCredentialsException::class);
@@ -78,13 +78,13 @@ it('raises the identical failure for an unknown email and a wrong password', fun
     $wrongPassword = null;
 
     try {
-        (new AuthService($repository(null), $hasher(true)))->login(new LoginCredentials('nobody@example.com', 'correct-horse'));
+        (new AuthService($repository(null), $hasher(true), 120))->login(new LoginCredentials('nobody@example.com', 'correct-horse'));
     } catch (InvalidCredentialsException $e) {
         $unknownEmail = $e;
     }
 
     try {
-        (new AuthService($repository($existing()), $hasher(false)))->login(new LoginCredentials('ada@example.com', 'wrong'));
+        (new AuthService($repository($existing()), $hasher(false), 120))->login(new LoginCredentials('ada@example.com', 'wrong'));
     } catch (InvalidCredentialsException $e) {
         $wrongPassword = $e;
     }
@@ -95,7 +95,7 @@ it('raises the identical failure for an unknown email and a wrong password', fun
 });
 
 it('keeps the submitted email and password out of the failure it raises', function () use ($repository, $hasher, $existing): void {
-    $service = new AuthService($repository($existing()), $hasher(false));
+    $service = new AuthService($repository($existing()), $hasher(false), 120);
 
     try {
         $service->login(new LoginCredentials('ada@example.com', 'correct-horse'));
@@ -116,7 +116,7 @@ it('maps the credential failure to VALIDATION_FAILED and 422', function (): void
 });
 
 it('treats a logout without an authenticated user as a no-op', function () use ($repository, $hasher): void {
-    $service = new AuthService($repository(null), $hasher(true));
+    $service = new AuthService($repository(null), $hasher(true), 120);
 
     $service->logout(null);
 
@@ -124,7 +124,7 @@ it('treats a logout without an authenticated user as a no-op', function () use (
 });
 
 it('treats a logout on a session token as a no-op rather than a fatal', function () use ($repository, $hasher, $existing): void {
-    $service = new AuthService($repository(null), $hasher(true));
+    $service = new AuthService($repository(null), $hasher(true), 120);
 
     $user = $existing();
     $user->withAccessToken(new TransientToken);
