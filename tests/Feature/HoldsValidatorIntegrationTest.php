@@ -31,8 +31,18 @@ $realtimeUrl = function () use ($internalToken): string {
     return rtrim($url, '/');
 };
 
-$validator = function (string $url, string $token) use ($internalToken): HoldsValidatorInterface {
-    return new HttpHoldsValidator(new Factory, $url, $token === '' ? $internalToken() : $token, 2.0, Log::getLogger());
+$internalUrl = function (): string {
+    $url = getenv('REALTIME_TEST_INTERNAL_URL');
+
+    if (! is_string($url) || $url === '') {
+        test()->markTestSkipped('REALTIME_TEST_INTERNAL_URL is not set; the holds integration test needs the INTERNAL_PORT address of that seatly-realtime.');
+    }
+
+    return rtrim($url, '/');
+};
+
+$validator = function (string $token) use ($internalToken, $internalUrl): HoldsValidatorInterface {
+    return new HttpHoldsValidator(new Factory, $internalUrl(), $token === '' ? $internalToken() : $token, 2.0, Log::getLogger());
 };
 
 $hold = function (string $url, int $eventId, array $seatIds, string $sessionId): void {
@@ -61,7 +71,7 @@ it('reports nothing missing for a hold really taken through POST /holds', functi
     $hold($url, $eventId, [11, 12], $sessionId);
 
     try {
-        expect($validator($url, '')->missingSeats($eventId, [11, 12], $sessionId))->toBe([]);
+        expect($validator('')->missingSeats($eventId, [11, 12], $sessionId))->toBe([]);
     } finally {
         $release($url, $eventId, [11, 12], $sessionId);
     }
@@ -75,7 +85,7 @@ it('names exactly the subset the session does not hold, in request order', funct
     $hold($url, $eventId, [21, 22], $sessionId);
 
     try {
-        expect($validator($url, '')->missingSeats($eventId, [23, 22, 24], $sessionId))->toBe([23, 24]);
+        expect($validator('')->missingSeats($eventId, [23, 22, 24], $sessionId))->toBe([23, 24]);
     } finally {
         $release($url, $eventId, [21, 22], $sessionId);
     }
@@ -90,8 +100,8 @@ it('counts a seat held by a different session as missing', function () use ($rea
     $hold($url, $eventId, [31], $owner);
 
     try {
-        expect($validator($url, '')->missingSeats($eventId, [31], $stranger))->toBe([31])
-            ->and($validator($url, '')->missingSeats($eventId, [31], $owner))->toBe([]);
+        expect($validator('')->missingSeats($eventId, [31], $stranger))->toBe([31])
+            ->and($validator('')->missingSeats($eventId, [31], $owner))->toBe([]);
     } finally {
         $release($url, $eventId, [31], $owner);
     }
@@ -106,8 +116,8 @@ it('counts a seat held at a different event as missing, same session and same se
     $hold($url, $heldEvent, [41], $sessionId);
 
     try {
-        expect($validator($url, '')->missingSeats($otherEvent, [41], $sessionId))->toBe([41])
-            ->and($validator($url, '')->missingSeats($heldEvent, [41], $sessionId))->toBe([]);
+        expect($validator('')->missingSeats($otherEvent, [41], $sessionId))->toBe([41])
+            ->and($validator('')->missingSeats($heldEvent, [41], $sessionId))->toBe([]);
     } finally {
         $release($url, $heldEvent, [41], $sessionId);
     }
@@ -121,7 +131,7 @@ it('validates a single seat, the shape the query encoding breaks first', functio
     $hold($url, $eventId, [51], $sessionId);
 
     try {
-        expect($validator($url, '')->missingSeats($eventId, [51], $sessionId))->toBe([]);
+        expect($validator('')->missingSeats($eventId, [51], $sessionId))->toBe([]);
     } finally {
         $release($url, $eventId, [51], $sessionId);
     }
@@ -135,7 +145,7 @@ it('refuses to answer when the shared token is wrong, rather than reporting noth
     $hold($url, $eventId, [61], $sessionId);
 
     try {
-        expect(fn () => $validator($url, 'a-wrong-internal-token')->missingSeats($eventId, [61], $sessionId))
+        expect(fn () => $validator('a-wrong-internal-token')->missingSeats($eventId, [61], $sessionId))
             ->toThrow(HoldsValidationUnavailableException::class);
     } finally {
         $release($url, $eventId, [61], $sessionId);
