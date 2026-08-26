@@ -164,11 +164,13 @@ than only run by hand.
 Six tests need a live `seatly-realtime`: `HoldsValidatorIntegrationTest` takes real holds
 through `POST /holds` and checks them back through `GET /internal/holds/validate`, including
 the different-session and different-event cases a stub cannot distinguish. They **skip**
-when `REALTIME_TEST_URL` or `REALTIME_TEST_TOKEN` is unset; point them at a running realtime
-and its token:
+when `REALTIME_TEST_URL`, `REALTIME_TEST_INTERNAL_URL` or `REALTIME_TEST_TOKEN` is unset;
+point them at a running realtime, its internal port and its token. The validate route
+answers only on realtime's `INTERNAL_PORT` and is 404 on the public port, so the two URLs
+differ:
 
 ```bash
--e REALTIME_TEST_URL=http://host.docker.internal:3000 -e REALTIME_TEST_TOKEN=<that realtime's INTERNAL_TOKEN>
+-e REALTIME_TEST_URL=http://host.docker.internal:3000 -e REALTIME_TEST_INTERNAL_URL=http://host.docker.internal:3001 -e REALTIME_TEST_TOKEN=<that realtime's INTERNAL_TOKEN>
 ```
 
 CI has no realtime service, so these six skip there; the timeout is covered unconditionally
