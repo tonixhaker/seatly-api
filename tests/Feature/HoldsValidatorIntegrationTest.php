@@ -2,8 +2,11 @@
 
 declare(strict_types=1);
 
+use App\Domain\Event\Events\EventPublished;
 use App\Domain\Order\Contracts\HoldsValidatorInterface;
 use App\Domain\Order\Exceptions\HoldsValidationUnavailableException;
+use App\Domain\Shared\Contracts\EventPublisherInterface;
+use App\Infrastructure\Messaging\RabbitMqEventPublisher;
 use App\Infrastructure\Realtime\HttpHoldsValidator;
 use Illuminate\Http\Client\Factory;
 use Illuminate\Support\Facades\Log;
@@ -45,14 +48,43 @@ $validator = function (string $token) use ($internalToken, $internalUrl): HoldsV
     return new HttpHoldsValidator(new Factory, $internalUrl(), $token === '' ? $internalToken() : $token, 2.0, Log::getLogger());
 };
 
-$hold = function (string $url, int $eventId, array $seatIds, string $sessionId): void {
-    $response = (new Factory)->acceptJson()->post($url.'/holds', [
-        'event_id' => $eventId,
-        'seat_ids' => $seatIds,
-        'session_id' => $sessionId,
-    ]);
+$broker = function () use ($internalUrl): EventPublisherInterface {
+    $internalUrl();
+    $url = getenv('RABBITMQ_TEST_URL');
 
-    expect($response->status())->toBe(201);
+    if (! is_string($url) || $url === '') {
+        test()->fail('RABBITMQ_TEST_URL is not set; the holds integration test publishes event.published to the broker that seatly-realtime consumes so realtime knows the seats it is asked to hold.');
+    }
+
+    config(['messaging.rabbitmq.url' => $url]);
+    app()->forgetInstance(EventPublisherInterface::class);
+    $publisher = app(EventPublisherInterface::class);
+
+    expect($publisher)->toBeInstanceOf(RabbitMqEventPublisher::class);
+
+    return $publisher;
+};
+
+$hold = function (string $url, int $eventId, array $seatIds, string $sessionId) use ($broker): void {
+    $publisher = $broker();
+
+    for ($attempt = 0; $attempt < 100; $attempt++) {
+        $publisher->publish(new EventPublished($eventId, $seatIds));
+
+        $response = (new Factory)->acceptJson()->post($url.'/holds', [
+            'event_id' => $eventId,
+            'seat_ids' => $seatIds,
+            'session_id' => $sessionId,
+        ]);
+
+        if ($response->status() === 201) {
+            break;
+        }
+
+        usleep(100_000);
+    }
+
+    expect($response->status())->toBe(201, "POST /holds for event {$eventId} never answered 201 after publishing event.published; last: {$response->status()} {$response->body()}");
 };
 
 $release = function (string $url, int $eventId, array $seatIds, string $sessionId): void {
