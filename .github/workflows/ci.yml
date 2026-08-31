@@ -80,6 +80,8 @@ jobs:
 
       - name: Regenerate the OpenAPI contract
         run: composer openapi
+        env:
+          DB_DATABASE: seatly_test
 
       - name: Fail if the OpenAPI contract changed
         run: git diff --exit-code docs/openapi.json
