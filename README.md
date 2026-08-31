@@ -167,10 +167,28 @@ the different-session and different-event cases a stub cannot distinguish. They 
 when `REALTIME_TEST_URL`, `REALTIME_TEST_INTERNAL_URL` or `REALTIME_TEST_TOKEN` is unset;
 point them at a running realtime, its internal port and its token. The validate route
 answers only on realtime's `INTERNAL_PORT` and is 404 on the public port, so the two URLs
-differ:
+differ.
+
+Realtime refuses to hold seats of an event it does not know, and these tests use made-up
+events 910001..910007. Before each hold they publish `event.published` for that event, so
+they also need `RABBITMQ_TEST_URL` pointing at **the broker that realtime consumes**. With
+the `REALTIME_TEST_*` variables set and `RABBITMQ_TEST_URL` unset they **fail**, not skip.
+Point all of them at a throwaway realtime, broker and Redis, never at the dev stack, or the
+made-up events land in its Redis:
 
 ```bash
--e REALTIME_TEST_URL=http://host.docker.internal:3000 -e REALTIME_TEST_INTERNAL_URL=http://host.docker.internal:3001 -e REALTIME_TEST_TOKEN=<that realtime's INTERNAL_TOKEN>
+-e REALTIME_TEST_URL=http://host.docker.internal:3000 -e REALTIME_TEST_INTERNAL_URL=http://host.docker.internal:3001 -e REALTIME_TEST_TOKEN=<that realtime's INTERNAL_TOKEN> -e RABBITMQ_TEST_URL=amqp://seatly:seatly@host.docker.internal:5672
+```
+
+With a throwaway compose project `-p <name>` running `postgres redis rabbitmq realtime`
+(published ports removed, realtime `INTERNAL_TOKEN` set to a throwaway value, `seatly_test`
+created in its postgres), run them from that project's `api-test`:
+
+```bash
+docker compose -p <name> ... --profile test run --rm --no-deps -T \
+  -e REALTIME_TEST_URL=http://realtime:3000 -e REALTIME_TEST_INTERNAL_URL=http://realtime:3001 \
+  -e REALTIME_TEST_TOKEN=<that token> -e RABBITMQ_TEST_URL=amqp://seatly:seatly@rabbitmq:5672 \
+  api-test ./vendor/bin/pest --filter HoldsValidatorIntegrationTest
 ```
 
 CI has no realtime service, so these six skip there; the timeout is covered unconditionally
