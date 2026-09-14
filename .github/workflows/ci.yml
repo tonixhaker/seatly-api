@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Tests, static analysis, style and contract
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4.2.2
+
+      - name: Set up PHP 8.4
+        uses: shivammathur/setup-php@2.32.0
+        with:
+          php-version: '8.4'
+          extensions: pdo_pgsql, pdo_sqlite
+          coverage: none
+
+      - name: Create the environment file
+        run: cp .env.example .env
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Generate the application key
+        run: php artisan key:generate
+
+      - name: Check style with Pint
+        run: vendor/bin/pint --test
+
+      - name: Fail if a PHPStan baseline exists
+        run: test ! -f phpstan-baseline.neon
+
+      - name: Analyse with PHPStan at level 9
+        run: vendor/bin/phpstan analyse --no-progress
+
+      - name: Run the Pest suite
+        run: vendor/bin/pest
+
+      - name: Regenerate the OpenAPI contract
+        run: composer openapi
+
+      - name: Fail if the OpenAPI contract changed
+        run: git diff --exit-code docs/openapi.json
+
+  docker:
+    name: Docker image
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4.2.2
+
+      - name: Build the image
+        run: docker build -t seatly-api:ci .
+
+      - name: Create the probe network
+        run: docker network create seatly-ci
+
+      - name: Start Postgres
+        run: |
+          docker run -d --name seatly-postgres-ci --network seatly-ci \
+            -e POSTGRES_PASSWORD=ci -e POSTGRES_USER=seatly -e POSTGRES_DB=seatly \
+            postgres:17
+
+      - name: Start the container
+        run: |
+          docker run -d --name seatly-api-ci --network seatly-ci -p 8000:8000 \
+            -e APP_KEY=base64:$(openssl rand -base64 32) \
+            -e DB_CONNECTION=pgsql -e DB_HOST=seatly-postgres-ci -e DB_PORT=5432 \
+            -e DB_DATABASE=seatly -e DB_USERNAME=seatly -e DB_PASSWORD=ci \
+            seatly-api:ci
+
+      - name: Probe liveness
+        run: curl --retry 15 --retry-delay 2 --retry-all-errors -fsS http://localhost:8000/health/live
+
+      - name: Probe readiness and require the postgres driver
+        run: |
+          curl --retry 15 --retry-delay 2 --retry-all-errors -fsS http://localhost:8000/health \
+            | tee /dev/stderr | grep -q '"database":"ok"'
+
+      - name: Require the container to run as a non-root user
+        run: test "$(docker exec seatly-api-ci id -un)" = "www-data"
+
+      - name: Stop the containers
+        if: always()
+        run: docker rm -f seatly-api-ci seatly-postgres-ci
