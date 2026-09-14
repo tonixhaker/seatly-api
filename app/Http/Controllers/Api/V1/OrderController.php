@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Order\Enums\OrderStatus;
+use App\Domain\Order\Exceptions\PaymentDeclinedException;
 use App\Domain\Order\Exceptions\SeatsNotHeldException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\PlaceOrderRequest;
@@ -12,6 +13,8 @@ use App\Http\Resources\OrderResource;
 use App\Http\Resources\TicketResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
  * @phpstan-type OrderItemFixture object{event_seat_id: int, price_cents: int}
@@ -24,6 +27,13 @@ final class OrderController extends Controller
 
     private const UNHELD_SEAT_IDS = [3, 7, 11];
 
+    /**
+     * Place an order for the seats this session holds.
+     *
+     * @throws AccessDeniedHttpException
+     * @throws SeatsNotHeldException
+     * @throws PaymentDeclinedException
+     */
     public function store(PlaceOrderRequest $request): JsonResponse
     {
         $seatIds = array_map(
@@ -61,6 +71,12 @@ final class OrderController extends Controller
         return (new OrderResource($order))->response()->setStatusCode(201);
     }
 
+    /**
+     * Return one of the buyer's own orders.
+     *
+     * @throws AccessDeniedHttpException
+     * @throws NotFoundHttpException
+     */
     public function show(string $id): OrderResource
     {
         if ($id !== self::ORDER_ID) {
@@ -70,6 +86,11 @@ final class OrderController extends Controller
         return new OrderResource(self::orderFixture());
     }
 
+    /**
+     * List the buyer's tickets.
+     *
+     * @throws AccessDeniedHttpException
+     */
     public function tickets(): AnonymousResourceCollection
     {
         return TicketResource::collection(self::ticketFixtures());

@@ -26,6 +26,7 @@ final class EventDetailResource extends JsonResource
             'id' => $this->id,
             'title' => $this->title,
             'description' => $this->description,
+            /** @format date-time */
             'starts_at' => $this->starts_at,
             'status' => $this->status,
             'venue' => new VenueResource($this->venue),

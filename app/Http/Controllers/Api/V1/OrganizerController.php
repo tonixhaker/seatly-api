@@ -16,6 +16,8 @@ use App\Http\Resources\EventStatsResource;
 use App\Http\Resources\TicketResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
  * @phpstan-type VenueFixture object{id: int, name: string, address: string, city: string}
@@ -30,6 +32,11 @@ final class OrganizerController extends Controller
 
     public function __construct(private readonly EventPolicy $policy) {}
 
+    /**
+     * Create a draft event.
+     *
+     * @throws AccessDeniedHttpException
+     */
     public function store(CreateEventRequest $request): JsonResponse
     {
         $event = (object) [
@@ -44,6 +51,13 @@ final class OrganizerController extends Controller
         return (new EventDetailResource($event))->response()->setStatusCode(201);
     }
 
+    /**
+     * Update a draft event.
+     *
+     * @throws AccessDeniedHttpException
+     * @throws NotFoundHttpException
+     * @throws InvalidEventTransitionException
+     */
     public function update(UpdateEventRequest $request, int $id): EventDetailResource
     {
         $event = $this->ownedEvent($request, $id);
@@ -59,6 +73,13 @@ final class OrganizerController extends Controller
         ]);
     }
 
+    /**
+     * Publish a draft event.
+     *
+     * @throws AccessDeniedHttpException
+     * @throws NotFoundHttpException
+     * @throws InvalidEventTransitionException
+     */
     public function publish(Request $request, int $id): EventDetailResource
     {
         $event = $this->ownedEvent($request, $id);
@@ -74,6 +95,12 @@ final class OrganizerController extends Controller
         ]);
     }
 
+    /**
+     * Return sales statistics for an event.
+     *
+     * @throws AccessDeniedHttpException
+     * @throws NotFoundHttpException
+     */
     public function stats(Request $request, int $id): EventStatsResource
     {
         $event = $this->ownedEvent($request, $id);
@@ -89,6 +116,13 @@ final class OrganizerController extends Controller
         ]);
     }
 
+    /**
+     * Check a ticket in at the door.
+     *
+     * @throws AccessDeniedHttpException
+     * @throws NotFoundHttpException
+     * @throws AlreadyCheckedInException
+     */
     public function checkIn(CheckInRequest $request): TicketResource
     {
         $ticket = self::ticket($request->string('qr_code')->toString());

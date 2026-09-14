@@ -15,21 +15,33 @@ final class AuthController extends Controller
 {
     private const TOKEN = '1|fixtureplaintextbearertokennotissuedyet';
 
+    /**
+     * Register a new buyer or organizer account.
+     */
     public function register(RegisterRequest $request): JsonResponse
     {
         return response()->json(['token' => self::TOKEN, 'user' => self::user()], 201);
     }
 
+    /**
+     * Exchange credentials for a bearer token.
+     */
     public function login(LoginRequest $request): JsonResponse
     {
         return response()->json(['token' => self::TOKEN, 'user' => self::user()]);
     }
 
+    /**
+     * Revoke the current bearer token.
+     */
     public function logout(): Response
     {
         return response()->noContent();
     }
 
+    /**
+     * Return the authenticated user.
+     */
     public function me(): UserResource
     {
         return self::user();
