@@ -28,6 +28,7 @@ final class EventResource extends JsonResource
             'starts_at' => $this->starts_at,
             'status' => $this->status,
             'venue' => [
+                /** @var int */
                 'id' => $this->venue->id,
                 'name' => $this->venue->name,
             ],
