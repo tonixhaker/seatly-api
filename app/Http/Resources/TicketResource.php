@@ -23,11 +23,14 @@ final class TicketResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
+            /** @format uuid */
             'id' => $this->id,
+            /** @format uuid */
             'order_id' => $this->order_id,
             'event_seat_id' => $this->event_seat_id,
             'qr_code' => $this->qr_code,
             'status' => $this->status,
+            /** @format date-time */
             'checked_in_at' => $this->checked_in_at,
         ];
     }

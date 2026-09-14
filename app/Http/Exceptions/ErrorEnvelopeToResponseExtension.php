@@ -10,6 +10,7 @@ use Dedoc\Scramble\Extensions\ExceptionToResponseExtension;
 use Dedoc\Scramble\Support\Generator\Response;
 use Dedoc\Scramble\Support\Generator\Schema;
 use Dedoc\Scramble\Support\Generator\Types\ArrayType;
+use Dedoc\Scramble\Support\Generator\Types\IntegerType;
 use Dedoc\Scramble\Support\Generator\Types\ObjectType as OpenApiObjectType;
 use Dedoc\Scramble\Support\Generator\Types\StringType;
 use Dedoc\Scramble\Support\Type\Generic;
@@ -91,21 +92,32 @@ final class ErrorEnvelopeToResponseExtension extends ExceptionToResponseExtensio
         $error = (new OpenApiObjectType)
             ->addProperty('code', (new StringType)->enum([$code->value]))
             ->addProperty('message', (new StringType)->setDescription('One human-readable sentence, safe to show a user.'))
-            ->addProperty('details', self::details($code))
             ->setRequired(['code', 'message']);
+
+        if (($details = self::details($code)) instanceof OpenApiObjectType) {
+            $error->addProperty('details', $details->setDescription('Omitted entirely when empty.'));
+        }
 
         return (new OpenApiObjectType)
             ->addProperty('error', $error)
             ->setRequired(['error']);
     }
 
-    private static function details(ErrorCode $code): OpenApiObjectType
+    private static function details(ErrorCode $code): ?OpenApiObjectType
     {
-        $details = (new OpenApiObjectType)
-            ->setDescription('Omitted entirely when empty.');
-
-        return $code === ErrorCode::VALIDATION_FAILED
-            ? $details->additionalProperties((new ArrayType)->setItems(new StringType))
-            : $details;
+        return match ($code) {
+            ErrorCode::VALIDATION_FAILED => (new OpenApiObjectType)
+                ->additionalProperties((new ArrayType)->setItems(new StringType)),
+            ErrorCode::SEATS_NOT_HELD => (new OpenApiObjectType)
+                ->addProperty('seats', (new ArrayType)->setItems(new IntegerType))
+                ->setRequired(['seats']),
+            ErrorCode::ALREADY_CHECKED_IN => (new OpenApiObjectType)
+                ->addProperty('checked_in_at', (new StringType)->format('date-time'))
+                ->setRequired(['checked_in_at']),
+            ErrorCode::INVALID_STATE_TRANSITION => (new OpenApiObjectType)
+                ->addProperty('status', new StringType)
+                ->setRequired(['status']),
+            default => null,
+        };
     }
 }

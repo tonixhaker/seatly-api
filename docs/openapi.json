@@ -42,8 +42,7 @@
                                     "type": "object",
                                     "properties": {
                                         "token": {
-                                            "type": "string",
-                                            "const": "1|fixtureplaintextbearertokennotissuedyet"
+                                            "type": "string"
                                         },
                                         "user": {
                                             "$ref": "#/components/schemas/UserResource"
@@ -131,8 +130,7 @@
                                     "type": "object",
                                     "properties": {
                                         "token": {
-                                            "type": "string",
-                                            "const": "1|fixtureplaintextbearertokennotissuedyet"
+                                            "type": "string"
                                         },
                                         "user": {
                                             "$ref": "#/components/schemas/UserResource"
@@ -224,10 +222,6 @@
                                                 "message": {
                                                     "type": "string",
                                                     "description": "One human-readable sentence, safe to show a user."
-                                                },
-                                                "details": {
-                                                    "type": "object",
-                                                    "description": "Omitted entirely when empty."
                                                 }
                                             },
                                             "required": [
@@ -283,10 +277,6 @@
                                                 "message": {
                                                     "type": "string",
                                                     "description": "One human-readable sentence, safe to show a user."
-                                                },
-                                                "details": {
-                                                    "type": "object",
-                                                    "description": "Omitted entirely when empty."
                                                 }
                                             },
                                             "required": [
@@ -594,10 +584,6 @@
                                                 "message": {
                                                     "type": "string",
                                                     "description": "One human-readable sentence, safe to show a user."
-                                                },
-                                                "details": {
-                                                    "type": "object",
-                                                    "description": "Omitted entirely when empty."
                                                 }
                                             },
                                             "required": [
@@ -667,10 +653,6 @@
                                                 "message": {
                                                     "type": "string",
                                                     "description": "One human-readable sentence, safe to show a user."
-                                                },
-                                                "details": {
-                                                    "type": "object",
-                                                    "description": "Omitted entirely when empty."
                                                 }
                                             },
                                             "required": [
@@ -742,7 +724,18 @@
                                                         },
                                                         "details": {
                                                             "type": "object",
-                                                            "description": "Omitted entirely when empty."
+                                                            "description": "Omitted entirely when empty.",
+                                                            "properties": {
+                                                                "seats": {
+                                                                    "type": "array",
+                                                                    "items": {
+                                                                        "type": "integer"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "required": [
+                                                                "seats"
+                                                            ]
                                                         }
                                                     },
                                                     "required": [
@@ -816,10 +809,6 @@
                                                 "message": {
                                                     "type": "string",
                                                     "description": "One human-readable sentence, safe to show a user."
-                                                },
-                                                "details": {
-                                                    "type": "object",
-                                                    "description": "Omitted entirely when empty."
                                                 }
                                             },
                                             "required": [
@@ -854,10 +843,6 @@
                                                 "message": {
                                                     "type": "string",
                                                     "description": "One human-readable sentence, safe to show a user."
-                                                },
-                                                "details": {
-                                                    "type": "object",
-                                                    "description": "Omitted entirely when empty."
                                                 }
                                             },
                                             "required": [
@@ -892,10 +877,6 @@
                                                 "message": {
                                                     "type": "string",
                                                     "description": "One human-readable sentence, safe to show a user."
-                                                },
-                                                "details": {
-                                                    "type": "object",
-                                                    "description": "Omitted entirely when empty."
                                                 }
                                             },
                                             "required": [
@@ -961,10 +942,6 @@
                                                 "message": {
                                                     "type": "string",
                                                     "description": "One human-readable sentence, safe to show a user."
-                                                },
-                                                "details": {
-                                                    "type": "object",
-                                                    "description": "Omitted entirely when empty."
                                                 }
                                             },
                                             "required": [
@@ -999,10 +976,6 @@
                                                 "message": {
                                                     "type": "string",
                                                     "description": "One human-readable sentence, safe to show a user."
-                                                },
-                                                "details": {
-                                                    "type": "object",
-                                                    "description": "Omitted entirely when empty."
                                                 }
                                             },
                                             "required": [
@@ -1037,10 +1010,6 @@
                                                 "message": {
                                                     "type": "string",
                                                     "description": "One human-readable sentence, safe to show a user."
-                                                },
-                                                "details": {
-                                                    "type": "object",
-                                                    "description": "Omitted entirely when empty."
                                                 }
                                             },
                                             "required": [
@@ -1099,10 +1068,6 @@
                                                 "message": {
                                                     "type": "string",
                                                     "description": "One human-readable sentence, safe to show a user."
-                                                },
-                                                "details": {
-                                                    "type": "object",
-                                                    "description": "Omitted entirely when empty."
                                                 }
                                             },
                                             "required": [
@@ -1137,10 +1102,6 @@
                                                 "message": {
                                                     "type": "string",
                                                     "description": "One human-readable sentence, safe to show a user."
-                                                },
-                                                "details": {
-                                                    "type": "object",
-                                                    "description": "Omitted entirely when empty."
                                                 }
                                             },
                                             "required": [
@@ -1206,10 +1167,6 @@
                                                 "message": {
                                                     "type": "string",
                                                     "description": "One human-readable sentence, safe to show a user."
-                                                },
-                                                "details": {
-                                                    "type": "object",
-                                                    "description": "Omitted entirely when empty."
                                                 }
                                             },
                                             "required": [
@@ -1244,10 +1201,6 @@
                                                 "message": {
                                                     "type": "string",
                                                     "description": "One human-readable sentence, safe to show a user."
-                                                },
-                                                "details": {
-                                                    "type": "object",
-                                                    "description": "Omitted entirely when empty."
                                                 }
                                             },
                                             "required": [
@@ -1367,10 +1320,6 @@
                                                 "message": {
                                                     "type": "string",
                                                     "description": "One human-readable sentence, safe to show a user."
-                                                },
-                                                "details": {
-                                                    "type": "object",
-                                                    "description": "Omitted entirely when empty."
                                                 }
                                             },
                                             "required": [
@@ -1405,10 +1354,6 @@
                                                 "message": {
                                                     "type": "string",
                                                     "description": "One human-readable sentence, safe to show a user."
-                                                },
-                                                "details": {
-                                                    "type": "object",
-                                                    "description": "Omitted entirely when empty."
                                                 }
                                             },
                                             "required": [
@@ -1446,7 +1391,15 @@
                                                 },
                                                 "details": {
                                                     "type": "object",
-                                                    "description": "Omitted entirely when empty."
+                                                    "description": "Omitted entirely when empty.",
+                                                    "properties": {
+                                                        "status": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "status"
+                                                    ]
                                                 }
                                             },
                                             "required": [
@@ -1481,10 +1434,6 @@
                                                 "message": {
                                                     "type": "string",
                                                     "description": "One human-readable sentence, safe to show a user."
-                                                },
-                                                "details": {
-                                                    "type": "object",
-                                                    "description": "Omitted entirely when empty."
                                                 }
                                             },
                                             "required": [
@@ -1594,10 +1543,6 @@
                                                 "message": {
                                                     "type": "string",
                                                     "description": "One human-readable sentence, safe to show a user."
-                                                },
-                                                "details": {
-                                                    "type": "object",
-                                                    "description": "Omitted entirely when empty."
                                                 }
                                             },
                                             "required": [
@@ -1632,10 +1577,6 @@
                                                 "message": {
                                                     "type": "string",
                                                     "description": "One human-readable sentence, safe to show a user."
-                                                },
-                                                "details": {
-                                                    "type": "object",
-                                                    "description": "Omitted entirely when empty."
                                                 }
                                             },
                                             "required": [
@@ -1673,7 +1614,15 @@
                                                 },
                                                 "details": {
                                                     "type": "object",
-                                                    "description": "Omitted entirely when empty."
+                                                    "description": "Omitted entirely when empty.",
+                                                    "properties": {
+                                                        "status": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "status"
+                                                    ]
                                                 }
                                             },
                                             "required": [
@@ -1708,10 +1657,6 @@
                                                 "message": {
                                                     "type": "string",
                                                     "description": "One human-readable sentence, safe to show a user."
-                                                },
-                                                "details": {
-                                                    "type": "object",
-                                                    "description": "Omitted entirely when empty."
                                                 }
                                             },
                                             "required": [
@@ -1777,10 +1722,6 @@
                                                 "message": {
                                                     "type": "string",
                                                     "description": "One human-readable sentence, safe to show a user."
-                                                },
-                                                "details": {
-                                                    "type": "object",
-                                                    "description": "Omitted entirely when empty."
                                                 }
                                             },
                                             "required": [
@@ -1815,10 +1756,6 @@
                                                 "message": {
                                                     "type": "string",
                                                     "description": "One human-readable sentence, safe to show a user."
-                                                },
-                                                "details": {
-                                                    "type": "object",
-                                                    "description": "Omitted entirely when empty."
                                                 }
                                             },
                                             "required": [
@@ -1853,10 +1790,6 @@
                                                 "message": {
                                                     "type": "string",
                                                     "description": "One human-readable sentence, safe to show a user."
-                                                },
-                                                "details": {
-                                                    "type": "object",
-                                                    "description": "Omitted entirely when empty."
                                                 }
                                             },
                                             "required": [
@@ -1922,10 +1855,6 @@
                                                 "message": {
                                                     "type": "string",
                                                     "description": "One human-readable sentence, safe to show a user."
-                                                },
-                                                "details": {
-                                                    "type": "object",
-                                                    "description": "Omitted entirely when empty."
                                                 }
                                             },
                                             "required": [
@@ -1963,7 +1892,16 @@
                                                 },
                                                 "details": {
                                                     "type": "object",
-                                                    "description": "Omitted entirely when empty."
+                                                    "description": "Omitted entirely when empty.",
+                                                    "properties": {
+                                                        "checked_in_at": {
+                                                            "type": "string",
+                                                            "format": "date-time"
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "checked_in_at"
+                                                    ]
                                                 }
                                             },
                                             "required": [
@@ -1998,10 +1936,6 @@
                                                 "message": {
                                                     "type": "string",
                                                     "description": "One human-readable sentence, safe to show a user."
-                                                },
-                                                "details": {
-                                                    "type": "object",
-                                                    "description": "Omitted entirely when empty."
                                                 }
                                             },
                                             "required": [
@@ -2036,10 +1970,6 @@
                                                 "message": {
                                                     "type": "string",
                                                     "description": "One human-readable sentence, safe to show a user."
-                                                },
-                                                "details": {
-                                                    "type": "object",
-                                                    "description": "Omitted entirely when empty."
                                                 }
                                             },
                                             "required": [
@@ -2300,7 +2230,8 @@
                 "type": "object",
                 "properties": {
                     "id": {
-                        "type": "string"
+                        "type": "string",
+                        "format": "uuid"
                     },
                     "event_id": {
                         "type": "integer"
@@ -2456,10 +2387,12 @@
                 "type": "object",
                 "properties": {
                     "id": {
-                        "type": "string"
+                        "type": "string",
+                        "format": "uuid"
                     },
                     "order_id": {
-                        "type": "string"
+                        "type": "string",
+                        "format": "uuid"
                     },
                     "event_seat_id": {
                         "type": "integer"
@@ -2474,7 +2407,8 @@
                         "type": [
                             "string",
                             "null"
-                        ]
+                        ],
+                        "format": "date-time"
                     }
                 },
                 "required": [

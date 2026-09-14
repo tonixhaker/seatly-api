@@ -24,6 +24,7 @@ final class OrderResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
+            /** @format uuid */
             'id' => $this->id,
             'event_id' => $this->event_id,
             'status' => $this->status,

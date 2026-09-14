@@ -20,7 +20,11 @@ final class AuthController extends Controller
      */
     public function register(RegisterRequest $request): JsonResponse
     {
-        return response()->json(['token' => self::TOKEN, 'user' => self::user()], 201);
+        return response()->json([
+            /** @var string */
+            'token' => self::TOKEN,
+            'user' => self::user(),
+        ], 201);
     }
 
     /**
@@ -28,7 +32,11 @@ final class AuthController extends Controller
      */
     public function login(LoginRequest $request): JsonResponse
     {
-        return response()->json(['token' => self::TOKEN, 'user' => self::user()]);
+        return response()->json([
+            /** @var string */
+            'token' => self::TOKEN,
+            'user' => self::user(),
+        ]);
     }
 
     /**
