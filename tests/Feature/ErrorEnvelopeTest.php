@@ -150,3 +150,12 @@ final class EnvelopeTestRequest extends FormRequest
         ];
     }
 }
+
+it('maps abort(403) to FORBIDDEN rather than a server error', function (): void {
+    $url = envelopeRoute('aborted-403', fn () => abort(403));
+
+    $this->getJson($url)
+        ->assertStatus(403)
+        ->assertJsonPath('error.code', 'FORBIDDEN')
+        ->assertJsonMissingPath('error.details');
+});
