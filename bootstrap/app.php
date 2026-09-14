@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Domain\Shared\Exceptions\DomainException;
 use App\Http\Exceptions\ApiExceptionRenderer;
+use App\Http\Middleware\EnsureRole;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -18,7 +19,9 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
         apiPrefix: 'api/v1',
     )
-    ->withMiddleware(function (Middleware $middleware): void {})
+    ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->alias(['role' => EnsureRole::class]);
+    })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->level(DomainException::class, LogLevel::WARNING);
         $exceptions->render(fn (Throwable $e, Request $request) => ApiExceptionRenderer::render($e, $request));
