@@ -9,9 +9,11 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 function envelopeRoute(string $name, Closure $handler): string
 {
@@ -108,6 +110,22 @@ it('maps a Form Request rejection to VALIDATION_FAILED with per-field errors', f
         ->assertJsonPath('error.details.quantity.0', 'The quantity field must be at least 1.')
         ->assertJsonMissingPath('message')
         ->assertJsonMissingPath('errors');
+});
+
+it('maps a throttled request to RATE_LIMITED', function (): void {
+    $url = envelopeRoute('throttled', fn () => throw new ThrottleRequestsException);
+
+    $this->getJson($url)
+        ->assertStatus(429)
+        ->assertJsonPath('error.code', 'RATE_LIMITED');
+});
+
+it('maps maintenance mode to SERVICE_UNAVAILABLE', function (): void {
+    $url = envelopeRoute('maintenance', fn () => throw new HttpException(503));
+
+    $this->getJson($url)
+        ->assertStatus(503)
+        ->assertJsonPath('error.code', 'SERVICE_UNAVAILABLE');
 });
 
 it('never returns Laravel\'s default error shape', function (): void {

@@ -14,6 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Throwable;
 
@@ -32,6 +33,17 @@ final class ApiExceptionRenderer
             $e instanceof AuthenticationException => self::envelope(ErrorCode::UNAUTHENTICATED, 'Authentication is required to access this resource.'),
             $e instanceof AuthorizationException, $e instanceof AccessDeniedHttpException => self::envelope(ErrorCode::FORBIDDEN, 'You are not allowed to perform this action.'),
             $e instanceof ModelNotFoundException, $e instanceof NotFoundHttpException => self::envelope(ErrorCode::NOT_FOUND, 'The requested resource was not found.'),
+            $e instanceof HttpExceptionInterface => self::fromStatus($e->getStatusCode()),
+            default => self::envelope(ErrorCode::INTERNAL_ERROR, 'An unexpected error occurred.'),
+        };
+    }
+
+    private static function fromStatus(int $status): JsonResponse
+    {
+        return match ($status) {
+            405 => self::envelope(ErrorCode::METHOD_NOT_ALLOWED, 'This HTTP method is not supported for this route.'),
+            429 => self::envelope(ErrorCode::RATE_LIMITED, 'Too many requests. Please retry later.'),
+            503 => self::envelope(ErrorCode::SERVICE_UNAVAILABLE, 'The service is temporarily unavailable.'),
             default => self::envelope(ErrorCode::INTERNAL_ERROR, 'An unexpected error occurred.'),
         };
     }
