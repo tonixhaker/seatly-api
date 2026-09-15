@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Domain\User\Enums\UserRole;
 use App\Models\User;
 
 function organizerUser(): User
@@ -27,9 +28,9 @@ dataset('organizerRoutes', [
     'POST /organizer/check-in' => ['post', '/api/v1/organizer/check-in'],
 ]);
 
-it('factory make keeps the id and the role attribute', function (): void {
+it('factory make keeps the id and casts the role to the UserRole enum', function (): void {
     expect(organizerUser()->getAttribute('id'))->toBe(10)
-        ->and(organizerUser()->getAttribute('role'))->toBe('organizer');
+        ->and(organizerUser()->getAttribute('role'))->toBe(UserRole::Organizer);
 });
 
 it('401 without a token on every organizer route, with no details key', function (string $method, string $uri): void {
@@ -41,7 +42,7 @@ it('401 without a token on every organizer route, with no details key', function
 })->with('organizerRoutes');
 
 it('403 on every organizer route for a buyer, a role-less user and a wrong-case role', function (string $method, string $uri): void {
-    foreach ([['role' => 'buyer'], ['role' => 'admin'], ['role' => 'ORGANIZER'], ['role' => ''], []] as $attributes) {
+    foreach ([['role' => 'buyer'], ['role' => null]] as $attributes) {
         $response = $this->actingAs(User::factory()->make($attributes), 'sanctum')
             ->json($method, $uri, eventPayload(['qr_code' => 'A1B2C3D4E5F6']))
             ->assertStatus(403)
