@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Event\DTO\EventDraftData;
 use App\Domain\Event\Exceptions\InvalidEventTransitionException;
+use App\Domain\Event\Services\EventDraftService;
 use App\Domain\Ticket\Exceptions\AlreadyCheckedInException;
 use App\Http\Controllers\Controller;
 use App\Http\Policies\EventPolicy;
@@ -26,11 +28,12 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  */
 final class OrganizerController extends Controller
 {
-    private const CREATED_EVENT_ID = 5;
-
     private const CHECKED_IN_AT = '2026-10-01T19:05:00Z';
 
-    public function __construct(private readonly EventPolicy $policy) {}
+    public function __construct(
+        private readonly EventPolicy $policy,
+        private readonly EventDraftService $drafts,
+    ) {}
 
     /**
      * Create a draft event.
@@ -39,14 +42,10 @@ final class OrganizerController extends Controller
      */
     public function store(CreateEventRequest $request): JsonResponse
     {
-        $event = (object) [
-            'id' => self::CREATED_EVENT_ID,
-            'title' => $request->string('title')->toString(),
-            'description' => $request->string('description')->toString(),
-            'starts_at' => $request->string('starts_at')->toString(),
-            'status' => 'draft',
-            'venue' => self::venue($request->integer('venue_id')),
-        ];
+        $event = $this->drafts->create(
+            $this->policy->callerId($request->user()),
+            self::draftData($request),
+        );
 
         return (new EventDetailResource($event))->response()->setStatusCode(201);
     }
@@ -60,17 +59,17 @@ final class OrganizerController extends Controller
      */
     public function update(UpdateEventRequest $request, int $id): EventDetailResource
     {
-        $event = $this->ownedEvent($request, $id);
-        self::assertDraft($event);
+        $event = $this->drafts->update(
+            $id,
+            $this->policy->callerId($request->user()),
+            self::draftData($request),
+        );
 
-        return new EventDetailResource((object) [
-            'id' => $event->id,
-            'title' => $request->string('title')->toString(),
-            'description' => $request->string('description')->toString(),
-            'starts_at' => $request->string('starts_at')->toString(),
-            'status' => $event->status,
-            'venue' => self::venue($request->integer('venue_id')),
-        ]);
+        if ($event === null) {
+            abort(404);
+        }
+
+        return new EventDetailResource($event);
     }
 
     /**
@@ -148,6 +147,16 @@ final class OrganizerController extends Controller
         ]);
     }
 
+    private static function draftData(CreateEventRequest|UpdateEventRequest $request): EventDraftData
+    {
+        return new EventDraftData(
+            venue_id: $request->integer('venue_id'),
+            title: $request->string('title')->toString(),
+            description: $request->filled('description') ? $request->string('description')->toString() : null,
+            starts_at: $request->string('starts_at')->toString(),
+        );
+    }
+
     /**
      * @return EventFixture
      */
@@ -187,20 +196,6 @@ final class OrganizerController extends Controller
         }
 
         abort(404);
-    }
-
-    /**
-     * @return VenueFixture
-     */
-    private static function venue(int $id): object
-    {
-        foreach (self::venueFixtures() as $venue) {
-            if ($venue->id === $id) {
-                return $venue;
-            }
-        }
-
-        return (object) ['id' => $id, 'name' => 'Unassigned Venue', 'address' => 'Not on file', 'city' => 'Not on file'];
     }
 
     /**
