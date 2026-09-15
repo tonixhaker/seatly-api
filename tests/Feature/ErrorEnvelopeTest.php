@@ -5,7 +5,7 @@ declare(strict_types=1);
 use App\Domain\Order\Exceptions\PaymentDeclinedException;
 use App\Domain\Shared\Enums\ErrorCode;
 use App\Domain\Shared\Exceptions\DomainException;
-use App\Models\User;
+use App\Domain\User\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;

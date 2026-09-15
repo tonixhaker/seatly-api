@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 use App\Domain\User\Enums\UserRole;
-use App\Models\User;
+use App\Domain\User\Models\User;
 
 function organizerUser(): User
 {
