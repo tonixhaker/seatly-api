@@ -101,8 +101,10 @@ thing with `DB_PORT=1`, since the runner does have the driver.
 
 ## Status
 
-Work in progress. The API surface is a fixture skeleton — the endpoints answer with the
-shapes the contract describes, backed by no database yet. The image builds and runs.
+Work in progress. Auth, the catalog and organizer draft/publish run against PostgreSQL.
+Orders, tickets and check-in still answer from fixtures — the shapes the contract
+describes, backed by no database — and milestone 05 replaces them. The image builds and
+runs.
 
 ## License
 
