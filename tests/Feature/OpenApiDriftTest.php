@@ -3,6 +3,9 @@
 declare(strict_types=1);
 
 use App\Domain\User\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+
+uses(RefreshDatabase::class);
 
 function driftSpec(): array
 {
@@ -143,4 +146,30 @@ it('omits only the known scramble paginator gap from meta.links', function (): v
 
     expect(array_values(array_diff($real, $documented)))->toBe(['page'])
         ->and(array_values(array_diff($documented, $real)))->toBe([]);
+});
+
+it('documents exactly the keys POST /auth/register really returns', function (): void {
+    $body = $this->postJson('/api/v1/auth/register', [
+        'name' => 'Ada Lovelace',
+        'email' => 'drift-register@example.com',
+        'password' => 'correct-horse',
+        'role' => 'buyer',
+    ])->assertCreated()->json();
+
+    expect(driftActualKeys($body))->toEqualCanonicalizing(driftDocumentedKeys('post', '/api/v1/auth/register', '201'))
+        ->and(array_keys((array) $body['user']))
+        ->toEqualCanonicalizing(array_keys(driftResolve(['$ref' => '#/components/schemas/UserResource'])['properties']));
+});
+
+it('documents exactly the keys POST /auth/login really returns', function (): void {
+    User::factory()->create(['email' => 'drift-login@example.com', 'password' => 'correct-horse']);
+
+    $body = $this->postJson('/api/v1/auth/login', [
+        'email' => 'drift-login@example.com',
+        'password' => 'correct-horse',
+    ])->assertOk()->json();
+
+    expect(driftActualKeys($body))->toEqualCanonicalizing(driftDocumentedKeys('post', '/api/v1/auth/login', '200'))
+        ->and(array_keys((array) $body['user']))
+        ->toEqualCanonicalizing(array_keys(driftResolve(['$ref' => '#/components/schemas/UserResource'])['properties']));
 });
