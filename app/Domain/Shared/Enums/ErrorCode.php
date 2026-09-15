@@ -11,6 +11,7 @@ enum ErrorCode: string
     case FORBIDDEN = 'FORBIDDEN';
     case NOT_FOUND = 'NOT_FOUND';
     case SEATS_NOT_HELD = 'SEATS_NOT_HELD';
+    case INVALID_SEAT_MAP_TEMPLATE = 'INVALID_SEAT_MAP_TEMPLATE';
     case ALREADY_CHECKED_IN = 'ALREADY_CHECKED_IN';
     case INVALID_STATE_TRANSITION = 'INVALID_STATE_TRANSITION';
     case PAYMENT_DECLINED = 'PAYMENT_DECLINED';
@@ -22,7 +23,7 @@ enum ErrorCode: string
     public function status(): int
     {
         return match ($this) {
-            self::VALIDATION_FAILED, self::SEATS_NOT_HELD => 422,
+            self::VALIDATION_FAILED, self::SEATS_NOT_HELD, self::INVALID_SEAT_MAP_TEMPLATE => 422,
             self::UNAUTHENTICATED => 401,
             self::FORBIDDEN => 403,
             self::NOT_FOUND => 404,

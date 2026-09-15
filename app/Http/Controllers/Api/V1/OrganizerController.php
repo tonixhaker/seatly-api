@@ -7,7 +7,9 @@ namespace App\Http\Controllers\Api\V1;
 use App\Domain\Event\DTO\EventDraftData;
 use App\Domain\Event\Exceptions\InvalidEventTransitionException;
 use App\Domain\Event\Services\EventDraftService;
+use App\Domain\Event\Services\EventPublishService;
 use App\Domain\Ticket\Exceptions\AlreadyCheckedInException;
+use App\Domain\Venue\Exceptions\InvalidSeatMapTemplateException;
 use App\Http\Controllers\Controller;
 use App\Http\Policies\EventPolicy;
 use App\Http\Requests\CheckInRequest;
@@ -33,6 +35,7 @@ final class OrganizerController extends Controller
     public function __construct(
         private readonly EventPolicy $policy,
         private readonly EventDraftService $drafts,
+        private readonly EventPublishService $publishing,
     ) {}
 
     /**
@@ -78,20 +81,17 @@ final class OrganizerController extends Controller
      * @throws AccessDeniedHttpException
      * @throws NotFoundHttpException
      * @throws InvalidEventTransitionException
+     * @throws InvalidSeatMapTemplateException
      */
     public function publish(Request $request, int $id): EventDetailResource
     {
-        $event = $this->ownedEvent($request, $id);
-        self::assertDraft($event);
+        $event = $this->publishing->publish($id, $this->policy->callerId($request->user()));
 
-        return new EventDetailResource((object) [
-            'id' => $event->id,
-            'title' => $event->title,
-            'description' => $event->description,
-            'starts_at' => $event->starts_at,
-            'status' => 'published',
-            'venue' => $event->venue,
-        ]);
+        if ($event === null) {
+            abort(404);
+        }
+
+        return new EventDetailResource($event);
     }
 
     /**
@@ -169,19 +169,6 @@ final class OrganizerController extends Controller
         }
 
         abort(404);
-    }
-
-    /**
-     * @param  EventFixture  $event
-     */
-    private static function assertDraft(object $event): void
-    {
-        if ($event->status !== 'draft') {
-            throw new InvalidEventTransitionException(
-                'Only a draft event can be edited or published.',
-                ['status' => $event->status],
-            );
-        }
     }
 
     /**
