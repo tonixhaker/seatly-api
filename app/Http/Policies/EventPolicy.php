@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Http\Policies;
 
-use App\Models\User;
 use Illuminate\Contracts\Auth\Authenticatable;
 
 final class EventPolicy
@@ -14,6 +13,8 @@ final class EventPolicy
      */
     public function owns(?Authenticatable $user, object $event): bool
     {
-        return $user instanceof User && $user->getAttribute('id') === $event->organizer_id;
+        $id = $user?->getAuthIdentifier();
+
+        return is_numeric($id) && (int) $id === $event->organizer_id;
     }
 }

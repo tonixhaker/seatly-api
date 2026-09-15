@@ -84,6 +84,21 @@ docker run --rm -v "$PWD":/var/www/html -w /var/www/html \
 
 Do not pass `-e DB_DATABASE` — that is what keeps the wipe aimed at `seatly_test`.
 
+The unit suite is the other half of the contract: it must pass with **no database at
+all**. `tests/Pest.php` binds `Tests\TestCase` to `Feature` only, so nothing under
+`tests/Unit/` boots the application, and a domain service reached through a mocked
+repository never opens a connection. Run it in an image that cannot open one — the stock
+`php:8.4-cli` has no `pdo_pgsql` driver and is on no Compose network, while `phpunit.xml`
+forces `DB_CONNECTION=pgsql`:
+
+```bash
+docker run --rm -v "$PWD":/app -w /app php:8.4-cli vendor/bin/pest --testsuite=Unit
+```
+
+A unit test that reaches for the database fails there with `could not find driver` rather
+than passing quietly against a connection it should never have had. CI enforces the same
+thing with `DB_PORT=1`, since the runner does have the driver.
+
 ## Status
 
 Work in progress. The API surface is a fixture skeleton — the endpoints answer with the
