@@ -7,6 +7,7 @@ use App\Domain\Event\Enums\SeatStatus;
 use App\Domain\Order\Enums\OrderStatus;
 use App\Domain\Ticket\Enums\TicketStatus;
 use App\Domain\User\Enums\UserRole;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -154,6 +155,18 @@ it('accepts a second event_seats row differing only in number, so the rejection 
     $ids = $scaffold();
 
     expect($insertSeat($ids['event_id'], 2))->toBeGreaterThan(0);
+});
+
+it('accepts the same section, row and number under a different event, so the key is composite on event_id', function () use ($insertUser, $insertVenue, $insertEvent, $insertSeat): void {
+    $organizerId = $insertUser('organizer');
+    $venueId = $insertVenue();
+    $first = $insertEvent($organizerId, $venueId);
+    $second = $insertEvent($organizerId, $venueId);
+
+    $insertSeat($first, 4);
+
+    expect($insertSeat($second, 4))->toBeGreaterThan(0)
+        ->and(DB::table('event_seats')->where('section', 'Stalls')->where('row', 1)->where('number', 4)->count())->toBe(2);
 });
 
 it('rejects a second orders row with an existing idempotency_key', function () use ($scaffold, $insertOrder): void {
@@ -405,7 +418,42 @@ it('declares the column type, nullability and length the generated client contra
     'tickets.qr_code is 12 characters' => ['tickets', 'qr_code', 'character varying', 'NO', 12],
     'orders.id is a uuid' => ['orders', 'id', 'uuid', 'NO', null],
     'tickets.id is a uuid' => ['tickets', 'id', 'uuid', 'NO', null],
-    'events.starts_at is required' => ['events', 'starts_at', 'timestamp without time zone', 'NO', null],
+    'events.starts_at is required' => ['events', 'starts_at', 'timestamp with time zone', 'NO', null],
     'events.description is nullable' => ['events', 'description', 'text', 'YES', null],
     'tickets.checked_in_at is nullable' => ['tickets', 'checked_in_at', 'timestamp without time zone', 'YES', null],
 ]);
+
+it('stores an offset-bearing starts_at as the instant it names, not as its wall-clock digits', function () use ($scaffold): void {
+    $ids = $scaffold();
+
+    $write = function (string $startsAt) use ($ids): int {
+        return (int) DB::table('events')->insertGetId([
+            'organizer_id' => $ids['organizer_id'],
+            'venue_id' => $ids['venue_id'],
+            'title' => 'Offset Probe',
+            'description' => null,
+            'starts_at' => $startsAt,
+            'status' => 'draft',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    };
+
+    $amsterdam = $write('2027-05-01T19:00:00+02:00');
+    $utc = $write('2027-05-01T17:00:00Z');
+
+    $matches = DB::table('events')
+        ->whereIn('id', [$amsterdam, $utc])
+        ->where('starts_at', '=', '2027-05-01T17:00:00Z')
+        ->count();
+
+    expect($matches)->toBe(2)
+        ->and(CarbonImmutable::parse((string) DB::table('events')->where('id', $amsterdam)->value('starts_at'))->utc()->toIso8601ZuluString())
+        ->toBe('2027-05-01T17:00:00Z');
+});
+
+it('pins the connection session timezone to UTC, so a timestamptz write does not depend on the server default', function (): void {
+    DB::purge('pgsql');
+
+    expect(DB::connection('pgsql')->selectOne('show timezone')->TimeZone)->toBe('UTC');
+});
