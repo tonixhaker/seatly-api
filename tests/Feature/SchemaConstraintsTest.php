@@ -315,3 +315,30 @@ it('indexes the leading column of every foreign key', function (): void {
 
     expect($unindexed)->toBe([]);
 });
+
+it('declares the column type, nullability and length the generated client contract depends on', function (string $table, string $column, string $type, string $nullable, ?int $length): void {
+    $col = DB::table('information_schema.columns')
+        ->where('table_schema', 'public')
+        ->where('table_name', $table)
+        ->where('column_name', $column)
+        ->first(['data_type', 'is_nullable', 'character_maximum_length']);
+
+    expect($col)->not->toBeNull()
+        ->and($col->data_type)->toBe($type)
+        ->and($col->is_nullable)->toBe($nullable)
+        ->and($col->character_maximum_length === null ? null : (int) $col->character_maximum_length)->toBe($length);
+})->with([
+    'event_seats.price_cents is integer minor units' => ['event_seats', 'price_cents', 'integer', 'NO', null],
+    'orders.total_cents is integer minor units' => ['orders', 'total_cents', 'integer', 'NO', null],
+    'order_items.price_cents is integer minor units' => ['order_items', 'price_cents', 'integer', 'NO', null],
+    'event_seats.x is an integer svg coordinate' => ['event_seats', 'x', 'integer', 'NO', null],
+    'event_seats.y is an integer svg coordinate' => ['event_seats', 'y', 'integer', 'NO', null],
+    'event_seats.currency is 3 characters' => ['event_seats', 'currency', 'character varying', 'NO', 3],
+    'orders.currency is 3 characters' => ['orders', 'currency', 'character varying', 'NO', 3],
+    'tickets.qr_code is 12 characters' => ['tickets', 'qr_code', 'character varying', 'NO', 12],
+    'orders.id is a uuid' => ['orders', 'id', 'uuid', 'NO', null],
+    'tickets.id is a uuid' => ['tickets', 'id', 'uuid', 'NO', null],
+    'events.starts_at is required' => ['events', 'starts_at', 'timestamp without time zone', 'NO', null],
+    'events.description is nullable' => ['events', 'description', 'text', 'YES', null],
+    'tickets.checked_in_at is nullable' => ['tickets', 'checked_in_at', 'timestamp without time zone', 'YES', null],
+]);
