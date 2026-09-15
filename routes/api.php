@@ -8,8 +8,10 @@ use App\Http\Controllers\Api\V1\OrderController;
 use App\Http\Controllers\Api\V1\OrganizerController;
 use Illuminate\Support\Facades\Route;
 
-Route::post('auth/register', [AuthController::class, 'register']);
-Route::post('auth/login', [AuthController::class, 'login']);
+Route::middleware('throttle:10,1')->group(function (): void {
+    Route::post('auth/register', [AuthController::class, 'register']);
+    Route::post('auth/login', [AuthController::class, 'login']);
+});
 
 Route::get('events', [CatalogController::class, 'index']);
 Route::get('events/{id}', [CatalogController::class, 'show'])->where('id', '[0-9]{1,18}');
