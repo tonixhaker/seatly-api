@@ -6,6 +6,7 @@ use App\Domain\User\Enums\UserRole;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 
 uses(RefreshDatabase::class);
 
@@ -18,6 +19,15 @@ it('serializes a User without password or remember_token', function (): void {
         ->and(array_key_exists('remember_token', $serialized))->toBeFalse()
         ->and($user->toJson())->not->toContain('$2y$')
         ->and($user->toJson())->not->toContain('remember_token');
+});
+
+it('hashes password on assignment, so plaintext never reaches the column', function (): void {
+    $user = User::factory()->create(['password' => 'plain-text-secret']);
+
+    $stored = (string) DB::table('users')->where('id', $user->getKey())->value('password');
+
+    expect($stored)->not->toBe('plain-text-secret')
+        ->and(Hash::check('plain-text-secret', $stored))->toBeTrue();
 });
 
 it('casts role to the UserRole enum after a database round trip', function (): void {
