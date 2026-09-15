@@ -54,13 +54,15 @@ function driftOrganizer(): User
 }
 
 it('documents exactly the keys GET /events/{id} really returns', function (): void {
-    $body = $this->getJson('/api/v1/events/1')->assertOk()->json();
+    $ids = $this->seedCatalog();
+    $body = $this->getJson('/api/v1/events/'.$ids['published'][0])->assertOk()->json();
 
     expect(driftActualKeys($body))->toEqualCanonicalizing(driftDocumentedKeys('get', '/api/v1/events/{id}', '200'));
 });
 
 it('documents exactly the keys GET /events/{id}/seats really returns', function (): void {
-    $body = $this->getJson('/api/v1/events/1/seats')->assertOk()->json();
+    $ids = $this->seedCatalog();
+    $body = $this->getJson('/api/v1/events/'.$ids['published'][0].'/seats')->assertOk()->json();
 
     expect(driftActualKeys($body))->toEqualCanonicalizing(driftDocumentedKeys('get', '/api/v1/events/{id}/seats', '200'));
 });

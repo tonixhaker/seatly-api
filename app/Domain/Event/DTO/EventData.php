@@ -13,7 +13,7 @@ final readonly class EventData
     public function __construct(
         public int $id,
         public string $title,
-        public ?string $description,
+        public string $description,
         public string $starts_at,
         public EventStatus $status,
         public VenueData $venue,
@@ -24,7 +24,7 @@ final readonly class EventData
         return new self(
             id: $event->id,
             title: $event->title,
-            description: $event->description,
+            description: $event->description ?? '',
             starts_at: $event->starts_at->toIso8601ZuluString(),
             status: $event->status,
             venue: VenueData::fromModel($event->venue),

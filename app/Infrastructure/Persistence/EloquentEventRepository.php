@@ -7,7 +7,9 @@ namespace App\Infrastructure\Persistence;
 use App\Domain\Event\DTO\EventFilter;
 use App\Domain\Event\Enums\EventStatus;
 use App\Domain\Event\Models\Event;
+use App\Domain\Event\Models\EventSeat;
 use App\Domain\Event\Repositories\EventRepositoryInterface;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Pagination\LengthAwarePaginator;
 
 final class EloquentEventRepository implements EventRepositoryInterface
@@ -45,6 +47,25 @@ final class EloquentEventRepository implements EventRepositoryInterface
             ->with('venue')
             ->where('organizer_id', $organizerId)
             ->find($id);
+    }
+
+    public function seatsForPublished(int $eventId): ?Collection
+    {
+        $exists = Event::query()
+            ->where('status', EventStatus::Published)
+            ->whereKey($eventId)
+            ->exists();
+
+        if (! $exists) {
+            return null;
+        }
+
+        return EventSeat::query()
+            ->where('event_id', $eventId)
+            ->orderBy('section')
+            ->orderBy('row')
+            ->orderBy('number')
+            ->get();
     }
 
     public function persist(Event $event): void
