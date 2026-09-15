@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Domain\User\Enums\UserRole;
 use App\Models\User;
 
 function buyerUser(): User
@@ -19,8 +20,8 @@ function orderPayload(array $overrides = []): array
     ], $overrides);
 }
 
-it('factory make keeps the role attribute', function (): void {
-    expect(buyerUser()->getAttribute('role'))->toBe('buyer');
+it('factory make casts the role attribute to the UserRole enum', function (): void {
+    expect(buyerUser()->getAttribute('role'))->toBe(UserRole::Buyer);
 });
 
 it('401 without a token', function (): void {
@@ -32,7 +33,7 @@ it('403 for an organizer and a role-less user', function (): void {
     $this->actingAs(User::factory()->make(['role' => 'organizer']), 'sanctum')
         ->getJson('/api/v1/my/tickets')->assertStatus(403)->assertJsonPath('error.code', 'FORBIDDEN');
 
-    $this->actingAs(User::factory()->make(), 'sanctum')
+    $this->actingAs(User::factory()->make(['role' => null]), 'sanctum')
         ->postJson('/api/v1/orders', orderPayload())->assertStatus(403)->assertJsonPath('error.code', 'FORBIDDEN');
 });
 
@@ -123,7 +124,7 @@ it('401 without a token on every buyer route, with no details key', function (st
 })->with('buyerRoutes');
 
 it('403 on every buyer route for every non-buyer, with no details key', function (string $method, string $uri): void {
-    foreach ([['role' => 'organizer'], ['role' => 'admin'], ['role' => 'BUYER'], ['role' => ''], []] as $attributes) {
+    foreach ([['role' => 'organizer'], ['role' => null]] as $attributes) {
         $response = $this->actingAs(User::factory()->make($attributes), 'sanctum')
             ->json($method, $uri, orderPayload())
             ->assertStatus(403)

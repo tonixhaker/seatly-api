@@ -12,6 +12,20 @@ jobs:
   checks:
     name: Tests, static analysis, style and contract
     runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: seatly_test
+          POSTGRES_USER: seatly
+          POSTGRES_PASSWORD: seatly
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - name: Check out the repository
         uses: actions/checkout@v4.2.2
