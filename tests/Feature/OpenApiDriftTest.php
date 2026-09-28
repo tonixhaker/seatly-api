@@ -1,0 +1,242 @@
+<?php
+
+declare(strict_types=1);
+
+use App\Domain\Order\Contracts\PaymentGatewayInterface;
+use App\Domain\Order\DTO\PaymentResult;
+use App\Domain\User\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
+
+uses(RefreshDatabase::class);
+
+$driftHolds = new stdClass;
+
+beforeEach(function () use ($driftHolds): void {
+    $driftHolds->body = ['valid' => true, 'missing' => []];
+
+    Http::preventStrayRequests();
+    Http::fake(fn (): mixed => Http::response($driftHolds->body, 200));
+
+    app()->instance(PaymentGatewayInterface::class, new class implements PaymentGatewayInterface
+    {
+        public function charge(int $amountCents, string $currency): PaymentResult
+        {
+            return PaymentResult::approved($amountCents, $currency);
+        }
+    });
+});
+
+function driftSpec(): array
+{
+    $decoded = json_decode((string) file_get_contents(base_path('docs/openapi.json')), true, 512, JSON_THROW_ON_ERROR);
+
+    return is_array($decoded) ? $decoded : [];
+}
+
+function driftResolve(mixed $schema): array
+{
+    $spec = driftSpec();
+
+    while (is_array($schema) && isset($schema['$ref'])) {
+        $schema = data_get($spec, str_replace(['#/', '/'], ['', '.'], (string) $schema['$ref']));
+    }
+
+    return is_array($schema) ? $schema : [];
+}
+
+function driftDocumentedKeys(string $method, string $path, string $status): array
+{
+    $schema = driftResolve(data_get(driftSpec(), 'paths.'.$path.'.'.$method.'.responses.'.$status.'.content.application/json.schema'));
+
+    if (($schema['type'] ?? null) === 'array') {
+        $schema = driftResolve($schema['items'] ?? []);
+    }
+
+    return array_keys($schema['properties'] ?? []);
+}
+
+function driftActualKeys(array $body): array
+{
+    $item = array_is_list($body) ? ($body[0] ?? []) : $body;
+
+    return array_keys(is_array($item) ? $item : []);
+}
+
+function driftBuyer(): User
+{
+    return User::factory()->make(['id' => 7, 'role' => 'buyer']);
+}
+
+it('documents exactly the keys GET /events/{id} really returns', function (): void {
+    $ids = $this->seedCatalog();
+    $body = $this->getJson('/api/v1/events/'.$ids['published'][0])->assertOk()->json();
+
+    expect(driftActualKeys($body))->toEqualCanonicalizing(driftDocumentedKeys('get', '/api/v1/events/{id}', '200'));
+});
+
+it('documents exactly the keys GET /events/{id}/seats really returns', function (): void {
+    $ids = $this->seedCatalog();
+    $body = $this->getJson('/api/v1/events/'.$ids['published'][0].'/seats')->assertOk()->json();
+
+    expect(driftActualKeys($body))->toEqualCanonicalizing(driftDocumentedKeys('get', '/api/v1/events/{id}/seats', '200'));
+});
+
+it('documents exactly the keys GET /me really returns', function (): void {
+    $body = $this->actingAs(driftBuyer(), 'sanctum')->getJson('/api/v1/me')->assertOk()->json();
+
+    expect(driftActualKeys($body))->toEqualCanonicalizing(driftDocumentedKeys('get', '/api/v1/me', '200'));
+});
+
+it('documents exactly the keys POST /orders really returns', function (): void {
+    $world = $this->seedPurchasable(2);
+
+    $body = $this->actingAs($world['buyer'], 'sanctum')->postJson('/api/v1/orders', [
+        'event_id' => $world['event'],
+        'seat_ids' => $world['seats'],
+        'session_id' => '1f3a2b4c-5d6e-4a7b-8c90-1e2f3a4b5c6d',
+        'idempotency_key' => 'drift-key',
+    ])->assertCreated()->json();
+
+    expect(driftActualKeys($body))->toEqualCanonicalizing(driftDocumentedKeys('post', '/api/v1/orders', '201'));
+});
+
+it('documents exactly the keys GET /my/tickets really returns', function (): void {
+    $world = $this->seedPurchasable(2);
+
+    $this->actingAs($world['buyer'], 'sanctum')->postJson('/api/v1/orders', [
+        'event_id' => $world['event'],
+        'seat_ids' => $world['seats'],
+        'session_id' => '1f3a2b4c-5d6e-4a7b-8c90-1e2f3a4b5c6d',
+        'idempotency_key' => 'drift-key-tickets',
+    ])->assertCreated();
+
+    $body = $this->actingAs($world['buyer'], 'sanctum')->getJson('/api/v1/my/tickets')->assertOk()->json();
+
+    expect($body)->toHaveCount(2)
+        ->and(driftActualKeys($body))->toEqualCanonicalizing(driftDocumentedKeys('get', '/api/v1/my/tickets', '200'));
+});
+
+it('documents exactly the keys GET /organizer/events/{id}/stats really returns', function (): void {
+    $ids = $this->seedCatalog();
+    $body = $this->actingAs(User::findOrFail($ids['organizer']), 'sanctum')->getJson('/api/v1/organizer/events/'.$ids['published'][0].'/stats')->assertOk()->json();
+
+    expect(driftActualKeys($body))->toEqualCanonicalizing(driftDocumentedKeys('get', '/api/v1/organizer/events/{id}/stats', '200'));
+});
+
+it('documents exactly the keys POST /organizer/check-in really returns', function (): void {
+    $ids = $this->seedCatalog();
+    $this->insertTicket($ids['published'][0], $ids['sold'][0], 'A1B2C3D4E5F6');
+
+    $body = $this->actingAs(User::findOrFail($ids['organizer']), 'sanctum')
+        ->postJson('/api/v1/organizer/check-in', ['qr_code' => 'A1B2C3D4E5F6'])
+        ->assertOk()->json();
+
+    expect(driftActualKeys($body))->toEqualCanonicalizing(driftDocumentedKeys('post', '/api/v1/organizer/check-in', '200'));
+});
+
+it('documents exactly the keys GET /organizer/events/{id} really returns', function (): void {
+    $ids = $this->seedCatalog();
+    $body = $this->actingAs(User::findOrFail($ids['organizer']), 'sanctum')->getJson('/api/v1/organizer/events/'.$ids['draft'])->assertOk()->json();
+
+    expect(driftActualKeys($body))->toEqualCanonicalizing(driftDocumentedKeys('get', '/api/v1/organizer/events/{id}', '200'));
+});
+
+it('documents exactly the keys GET /organizer/venues really returns', function (): void {
+    $ids = $this->seedCatalog();
+    $body = $this->actingAs(User::findOrFail($ids['organizer']), 'sanctum')->getJson('/api/v1/organizer/venues')->assertOk()->json();
+
+    expect($body)->toHaveCount(2)
+        ->and(driftActualKeys($body))->toEqualCanonicalizing(driftDocumentedKeys('get', '/api/v1/organizer/venues', '200'));
+});
+
+it('documents the paginated envelope and item keys GET /organizer/events really returns', function (): void {
+    $ids = $this->seedCatalog();
+    $body = $this->actingAs(User::findOrFail($ids['organizer']), 'sanctum')->getJson('/api/v1/organizer/events')->assertOk()->json();
+    $schema = driftResolve(data_get(driftSpec(), 'paths./api/v1/organizer/events.get.responses.200.content.application/json.schema'));
+
+    expect(array_keys($body))->toEqualCanonicalizing(array_keys($schema['properties']))
+        ->and(array_keys($body['data'][0]))->toEqualCanonicalizing(array_keys(driftResolve($schema['properties']['data']['items'])['properties']));
+});
+
+it('documents the real SEATS_NOT_HELD details payload', function () use ($driftHolds): void {
+    $driftHolds->body = ['valid' => false, 'missing' => [3, 7]];
+
+    $body = $this->actingAs(driftBuyer(), 'sanctum')->postJson('/api/v1/orders', [
+        'event_id' => 1,
+        'seat_ids' => [1, 3, 7],
+        'session_id' => '1f3a2b4c-5d6e-4a7b-8c90-1e2f3a4b5c6d',
+        'idempotency_key' => 'drift-key-422',
+    ])->assertStatus(422)->json();
+
+    $documented = collect(driftResolve(data_get(driftSpec(), 'paths./api/v1/orders.post.responses.422.content.application/json.schema'))['anyOf'] ?? [])
+        ->firstWhere('properties.error.properties.code.enum.0', 'SEATS_NOT_HELD');
+
+    expect($body['error']['code'])->toBe('SEATS_NOT_HELD')
+        ->and(array_keys($body['error']['details']))
+        ->toEqualCanonicalizing(array_keys(data_get($documented, 'properties.error.properties.details.properties')));
+});
+
+it('documents the real ALREADY_CHECKED_IN details payload', function (): void {
+    $ids = $this->seedCatalog();
+    $this->insertTicket($ids['published'][0], $ids['sold'][0], 'G7H8J9K0L1M2');
+    $organizer = User::findOrFail($ids['organizer']);
+
+    $this->actingAs($organizer, 'sanctum')
+        ->postJson('/api/v1/organizer/check-in', ['qr_code' => 'G7H8J9K0L1M2'])
+        ->assertOk();
+
+    $body = $this->actingAs($organizer, 'sanctum')
+        ->postJson('/api/v1/organizer/check-in', ['qr_code' => 'G7H8J9K0L1M2'])
+        ->assertStatus(409)->json();
+
+    $documented = driftResolve(data_get(driftSpec(), 'paths./api/v1/organizer/check-in.post.responses.409.content.application/json.schema'));
+
+    expect($body['error']['code'])->toBe('ALREADY_CHECKED_IN')
+        ->and(array_keys($body['error']['details']))
+        ->toEqualCanonicalizing(array_keys(data_get($documented, 'properties.error.properties.details.properties')));
+});
+
+it('documents the paginated envelope GET /events really returns', function (): void {
+    $body = $this->getJson('/api/v1/events')->assertOk()->json();
+    $schema = driftResolve(data_get(driftSpec(), 'paths./api/v1/events.get.responses.200.content.application/json.schema'));
+
+    expect(array_keys($body))->toEqualCanonicalizing(array_keys($schema['properties']));
+});
+
+it('omits only the known scramble paginator gap from meta.links', function (): void {
+    $body = $this->getJson('/api/v1/events')->assertOk()->json();
+    $schema = driftResolve(data_get(driftSpec(), 'paths./api/v1/events.get.responses.200.content.application/json.schema'));
+
+    $documented = array_keys(data_get($schema, 'properties.meta.properties.links.items.properties'));
+    $real = array_keys($body['meta']['links'][0]);
+
+    expect(array_values(array_diff($real, $documented)))->toBe(['page'])
+        ->and(array_values(array_diff($documented, $real)))->toBe([]);
+});
+
+it('documents exactly the keys POST /auth/register really returns', function (): void {
+    $body = $this->postJson('/api/v1/auth/register', [
+        'name' => 'Ada Lovelace',
+        'email' => 'drift-register@example.com',
+        'password' => 'correct-horse',
+        'role' => 'buyer',
+    ])->assertCreated()->json();
+
+    expect(driftActualKeys($body))->toEqualCanonicalizing(driftDocumentedKeys('post', '/api/v1/auth/register', '201'))
+        ->and(array_keys((array) $body['user']))
+        ->toEqualCanonicalizing(array_keys(driftResolve(['$ref' => '#/components/schemas/UserResource'])['properties']));
+});
+
+it('documents exactly the keys POST /auth/login really returns', function (): void {
+    User::factory()->create(['email' => 'drift-login@example.com', 'password' => 'correct-horse']);
+
+    $body = $this->postJson('/api/v1/auth/login', [
+        'email' => 'drift-login@example.com',
+        'password' => 'correct-horse',
+    ])->assertOk()->json();
+
+    expect(driftActualKeys($body))->toEqualCanonicalizing(driftDocumentedKeys('post', '/api/v1/auth/login', '200'))
+        ->and(array_keys((array) $body['user']))
+        ->toEqualCanonicalizing(array_keys(driftResolve(['$ref' => '#/components/schemas/UserResource'])['properties']));
+});
